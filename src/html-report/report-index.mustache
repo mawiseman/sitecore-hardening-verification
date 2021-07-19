@@ -1,0 +1,29 @@
+<html>
+
+<head>
+    <title>Sitecore Hardening Report Index</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+            color: #333;
+        }
+
+        .pass {
+            color: green;
+        }
+
+        .fail {
+            color: red;
+        }
+    </style>
+</head>
+
+<body>
+    <ul>
+    {{#.}}
+        <li><a href="{{.}}">{{.}}</a></li>
+    {{/.}}
+    </ul>
+</body>
+
+</html>

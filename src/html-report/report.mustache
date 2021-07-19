@@ -1,0 +1,42 @@
+<html>
+
+<head>
+    <title>Sitecore Hardening Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+            color: #333;
+        }
+
+        .pass {
+            color: green;
+        }
+
+        .fail {
+            color: red;
+        }
+    </style>
+</head>
+
+<body>
+    {{#.}}
+    <h1><a href="{{SiteUrl}}">{{SiteUrl}}</a></h1>
+
+    <ul>
+        <li><strong>Redirect Url:</strong> {{RedirectUrl}}</li>
+        <li><strong>Sitecore Version:</strong> {{SitecoreVersion}}</li>
+    </ul>
+
+    {{#SiteResults}}
+    <h2>{{Title}}: <span class="{{Outcome}}">{{Outcome}}</span></h2>
+    <ul>
+        {{#Tests}}
+        <li><strong>{{Title}}:</strong> <span class="{{Outcome}}">{{Details}}</span></li>
+        {{/Tests}}
+    </ul>
+    {{/SiteResults}}
+
+    {{/.}}
+</body>
+
+</html>

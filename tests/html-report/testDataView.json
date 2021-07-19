@@ -1,0 +1,107 @@
+{
+    "RedirectUrl": "https://www.actewagl.com.au/",
+    "SiteUrl": "http://www.actewagl.com.au/",
+    "SitecoreVersion": "8.1.160302",
+    "SiteResults": [
+        {
+            "Title": "Deny Anonomous Access",
+            "Outcome": "Pass",
+            "Tests": [
+                {
+                    "Title": "/sitecore/admin/dbbrowser.css",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "StatusCode: 401"
+                },
+                {
+                    "Title": "/sitecore/debug/Trace.xslt",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "StatusCode: 401"
+                },
+                {
+                    "Title": "/sitecore/login",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "StatusCode: 401"
+                },
+                {
+                    "Title": "/sitecore/shell/WebService/Service.asmx",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "StatusCode: 401"
+                }
+            ],
+            "Details": ""
+        },
+        {
+            "Title": "Limit Access to XSL",
+            "Outcome": "Fail",
+            "Tests": [
+                {
+                    "Title": "/xsl/sample%20rendering.xslt",
+                    "Outcome": "Fail",
+                    "Tests": null,
+                    "Details": "StatusCode: 200"
+                }
+            ],
+            "Details": ""
+        },
+        {
+            "Title": "Remove Header Information",
+            "Outcome": "Pass",
+            "Tests": [
+                {
+                    "Title": "X-Aspnet-Version",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "Removed: True"
+                },
+                {
+                    "Title": "X-Powered-By",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "Removed: True"
+                },
+                {
+                    "Title": "X-AspNetMvc-Version",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "Removed: True"
+                }
+            ],
+            "Details": ""
+        },
+        {
+            "Title": "Force Https Redirect",
+            "Outcome": "Pass",
+            "Tests": null,
+            "Details": ""
+        },
+        {
+            "Title": "Simple File Check",
+            "Outcome": "Pass",
+            "Tests": [
+                {
+                    "Title": "/webedit.css",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "StatusCode: 200"
+                },
+                {
+                    "Title": "/default.css",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "StatusCode: 200"
+                },
+                {
+                    "Title": "/default.js",
+                    "Outcome": "Pass",
+                    "Tests": null,
+                    "Details": "StatusCode: 200"
+                }
+            ],
+            "Details": "Sitecore Certainty: 100%"
+        }
+    ]    
+}
