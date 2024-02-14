@@ -553,23 +553,61 @@ function Get-SitecoreSimpleFileCheck {
         ## Check known static Sitecore files
 
         $Paths = @(
-            "/webedit.css"
-            "/default.css"
-            "/default.js"
+            "webedit.css"
+            "default.css"
+            "default.js"
         )
+
+        $FullHash = "";
+        $VersionHashes = [ordered]@{};
 
         foreach ($Path in $Paths) {
             $TestUri = Join-Uri $Url $Path
             $TestUrl = $TestUri.AbsoluteUri
-
+                
             $StatusCode = 0
-
+                
+            $SitecoreVersions = @()
+                
             try {
                 $Request = [System.Net.WebRequest]::Create($TestUrl)
                 $Response = $Request.GetResponse()
-        
+                        
                 $StatusCode = [int]$Response.StatusCode
-
+                 
+                # Get the stream hash - for the next test
+            
+                $ResponseStream = $Response.GetResponseStream()
+                $ResponseHash = $(Get-FileHash -InputStream $ResponseStream).Hash
+                $FullHash += $Path + $ResponseHash
+    
+                # Find all the files that match
+            
+                $StartPath = Get-Location
+            
+                $AllFiles = Get-ChildItem -Path $StartPath -Recurse -Directory | Sort-Object -Property FullName -Descending
+            
+                $AllFiles | ForEach-Object {
+                            
+                    # Get all the files that match the name
+            
+                    $MatchingFiles = Get-ChildItem -Path $_.FullName -File | Where-Object { $_.Name -eq $Path }
+                            
+                    foreach ($MatchingFile in $MatchingFiles) {
+                        $VersionName = $($_.Name -Replace "Sitecore", "").Trim()
+                        
+                        $MatchingFileHash = $(Get-FileHash $MatchingFile.FullName).Hash
+                                
+                        If($MatchingFileHash -eq $ResponseHash) {
+                                
+                            if($VersionName -ne "") {
+                                $SitecoreVersions += , $VersionName
+                            }
+                        }
+                    }   
+                }
+                
+                
                 $Response.Close()
                 $Response.Dispose()
             }
@@ -579,16 +617,67 @@ function Get-SitecoreSimpleFileCheck {
             }
             catch {
                 $StatusCode = 500
+                write-host $_.Exception
             }
-            
+                            
             $PathResult = $PASS
-
+                
             if ($StatusCode -ne 200) {
                 $PathResult = $FAIL
             }
-
-            $TestResult = Get-ResultObject -Title $Path -Outcome $PathResult -Details "StatusCode: $StatusCode"
+                
+            $SitecoreVersionsDisplay = "Unknown"
+                    
+            if($SitecoreVersions.length -gt 0) {
+                $SitecoreVersionsDisplay = $SitecoreVersions[0]
+            }
+                
+            if($SitecoreVersions.length -gt 1) {
+                $SitecoreVersionsDisplay = "$SitecoreVersionsDisplay - $($SitecoreVersions[$SitecoreVersions.length - 1])"
+            }
+                
+            $TestResult = Get-ResultObject -Title $Path -Outcome $PathResult -Details "StatusCode: $StatusCode, Matches: $SitecoreVersionsDisplay"
             $TestResults += , $TestResult
+        }
+        
+        # Build local hashes
+        
+        $StartPath = Get-Location
+        $AllFiles = Get-ChildItem -Path $StartPath -Recurse -Directory | Sort-Object -Property FullName -Descending
+        
+        foreach ($Path in $Paths) {
+        
+            $AllFiles | ForEach-Object {
+                              
+                # Get all the files that match the name
+                
+                $MatchingFiles = Get-ChildItem -Path $_.FullName -File | Where-Object { $_.Name -eq $Path }
+                              
+                foreach ($MatchingFile in $MatchingFiles) {
+                    $VersionName = $_.Name -Replace "Sitecore", ""
+                    
+                    $MatchingFileHash = $(Get-FileHash $MatchingFile.FullName).Hash
+                        
+                    if (-not $VersionHashes.Contains($VersionName)) {
+                        $VersionHashes.Add($VersionName, "")
+                    }
+        
+                    $VersionHashes[$VersionName] += $Path + $MatchingFileHash
+                    
+                }
+        
+            }
+        }
+        
+        # Check for version matches
+        
+        $PossibleVersions = @()
+        
+        foreach ($Key in $VersionHashes.Keys) {
+        
+            if( $VersionHashes[$Key] -eq $FullHash) {
+                $PossibleVersions += $Key
+            }
         }
         
         ## Check some urls that would return a 404 in non Sitecore Sites
@@ -600,17 +689,27 @@ function Get-SitecoreSimpleFileCheck {
         
         # Calculate the probability that this site is Sitecore
         
-        $FilesFound = $TestResults.GetEnumerator() | ? { $_.Outcome -like "*$PASS" }
-        $PercentHitRate = [math]::Round($($FilesFound.length / $Paths.count) * 100)
-        
         $Result = $FAIL
-        if ($PercentHitRate -gt 80) {
+         
+        if ($PossibleVersions.length -eq 0) {
+            # If there are no "PossibleVersions" then lets generate a certainty based on the matched files
+            
+            $FilesFound = $TestResults.GetEnumerator() | Where-Object { $_.Outcome -like "*$PASS" }
+            $SitecoreCertainty = "$([math]::Round($($FilesFound.length / $Paths.count) * 100))%"
+            
+            if ($PercentHitRate -gt 80) {
+                $Result = $PASS
+            }
+        }
+        else {
+            $SitecoreCertainty = $PossibleVersions -join ", "
             $Result = $PASS
         }
+        
 
         # Results
 
-        Get-ResultObject -Title "Simple File Check" -Outcome $Result -Tests $TestResults -Details "Sitecore Certainty: $PercentHitRate%"
+        Get-ResultObject -Title "Simple File Check" -Outcome $Result -Tests $TestResults -Details "Sitecore Certainty: $SitecoreCertainty"
     }
 }
 
@@ -674,7 +773,7 @@ function Get-HardeningChecks {
                 $SiteResults += Get-HardeningResultRemoveHeaders -Url $RedirectUrl 
                 
                 Write-Progress -Activity $ReportProgressActivity -Status "Step: 7 of $($Tests): Sitecore Simple File Check" -PercentComplete ((7 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-SitecoreSimpleFileCheck -Url $RedirectUrl 
+                $SiteResults += Get-SitecoreSimpleFileCheck -Url $RedirectUrl
 
                 Write-Progress -Activity $ReportProgressActivity -Status "Step: 8 of $($Tests): Handle Unsupported Languages Check" -PercentComplete ((7 / $Tests) * 100) -ParentId 1
                 $SiteResults += Get-HardeningResultUnsupportedLanguages -Url $RedirectUrl 
