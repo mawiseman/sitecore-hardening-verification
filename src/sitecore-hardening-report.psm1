@@ -20,38 +20,6 @@ function EnableTLS {
 }
 EnableTLS
 
-#I'm not sure why i included this function now
-# function Set-UseUnsafeHeaderParsing {
-#     param(
-#         [Parameter(Mandatory, ParameterSetName = 'Enable')]
-#         [switch]$Enable,
-
-#         [Parameter(Mandatory, ParameterSetName = 'Disable')]
-#         [switch]$Disable
-#     )
-
-#     $ShouldEnable = $PSCmdlet.ParameterSetName -eq 'Enable'
-
-#     $netAssembly = [Reflection.Assembly]::GetAssembly([System.Net.Configuration.SettingsSection])
-
-#     if ($netAssembly) {
-#         $bindingFlags = [Reflection.BindingFlags] 'Static,GetProperty,NonPublic'
-#         $settingsType = $netAssembly.GetType('System.Net.Configuration.SettingsSectionInternal')
-
-#         $instance = $settingsType.InvokeMember('Section', $bindingFlags, $null, $null, @())
-
-#         if ($instance) {
-#             $bindingFlags = 'NonPublic', 'Instance'
-#             $useUnsafeHeaderParsingField = $settingsType.GetField('useUnsafeHeaderParsing', $bindingFlags)
-
-#             if ($useUnsafeHeaderParsingField) {
-#                 $useUnsafeHeaderParsingField.SetValue($instance, $ShouldEnable)
-#             }
-#         }
-#     }
-# }
-# Set-UseUnsafeHeaderParsing -Enable
-
 function Remove-InvalidFileNameChars {
     param(
         [Parameter(Mandatory = $true,
@@ -480,26 +448,29 @@ function Get-HardeningResultUnsupportedLanguages {
         
         # Perform Tests
     
-        $Languages = @(
-            "en"
-            "om"
-            "br"
-        )
+        $Languages = @()
+        $Languages += [PSCustomObject]@{
+            languageCode = "en"
+            expectedStatusCode = 200
+        }
+        $Languages += [PSCustomObject]@{
+            languageCode = "om"
+            expectedStatusCode = 404
+        }
+        $Languages += [PSCustomObject]@{
+            languageCode = "br"
+            expectedStatusCode = 404
+        }
 
         foreach ($Language in $Languages) {
-            $TestUri = Join-Uri $Url $Language
+            $TestUri = Join-Uri $Url $Language.languageCode
             $TestUrl = $TestUri.AbsoluteUri
 
             $StatusCode = 0
 
             try {
-                $Request = [System.Net.WebRequest]::Create($TestUrl)
-                $Response = $Request.GetResponse()
-        
+                $Response = Invoke-WebRequest -Uri $TestUrl -UseBasicParsing -ErrorAction silentlycontinue -MaximumRedirection 1 -ErrorVariable siteIsNotAlive 
                 $StatusCode = [int]$Response.StatusCode
-
-                $Response.Close()
-                $Response.Dispose()
             }
             catch [System.Net.WebException] {
                 # Handles 401, 404 etc
@@ -509,17 +480,17 @@ function Get-HardeningResultUnsupportedLanguages {
                 $StatusCode = 500
             }
             
-            $LanguageResult = $PASS
+            $LanguageResult = $FAIL
 
-            if ($StatusCode -eq 500) {
-                $LanguageResult = $FAIL
-            }
-
-            if ($LanguageResult -eq $FAIL) {
+            if ($StatusCode -eq $Language.expectedStatusCode) {
+                $LanguageResult = $PASS
+            } 
+            else {
+                $ExpectedStatusMessage = "Expected: ($Language.expectedStatusCode)"
                 $Result = $FAIL
             }
 
-            $TestResult = Get-ResultObject -Title $Language -Outcome $LanguageResult -Details "StatusCode: $StatusCode"
+            $TestResult = Get-ResultObject -Title $Language.languageCode -Outcome $LanguageResult -Details "StatusCode: $StatusCode $ExpectedStatusMessage"
             $TestResults += , $TestResult
         }
         
