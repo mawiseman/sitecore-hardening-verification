@@ -486,7 +486,7 @@ function Get-HardeningResultUnsupportedLanguages {
                 $LanguageResult = $PASS
             } 
             else {
-                $ExpectedStatusMessage = "Expected: ($Language.expectedStatusCode)"
+                $ExpectedStatusMessage = "Expected: $($Language.expectedStatusCode)"
                 $Result = $FAIL
             }
 
@@ -673,14 +673,14 @@ function Get-SitecoreSimpleFileCheck {
             }
         }
         else {
-            $SitecoreCertainty = $PossibleVersions -join ", "
+            $SitecoreCertainty = "$($PossibleVersions[0]) - $($PossibleVersions[$PossibleVersions.length - 1])"
             $Result = $PASS
         }
         
 
         # Results
 
-        Get-ResultObject -Title "Simple File Check" -Outcome $Result -Tests $TestResults -Details "Sitecore Certainty: $SitecoreCertainty"
+        Get-ResultObject -Title "Simple File Check" -Outcome $Result -Tests $TestResults -Details "Matches: $SitecoreCertainty"
     }
 }
 
