@@ -578,7 +578,6 @@ function Get-SitecoreSimpleFileCheck {
                     }   
                 }
                 
-                
                 $Response.Close()
                 $Response.Dispose()
             }
@@ -598,13 +597,20 @@ function Get-SitecoreSimpleFileCheck {
             }
                 
             $SitecoreVersionsDisplay = "Unknown"
-                    
+            
+            #Sort the versions
+            $SitecoreVersions = $SitecoreVersions | Sort-Object {
+                $_ -split " rev" | Select-Object -Index 0 | %{ [Version]($_) }
+            }
+
             if($SitecoreVersions.length -gt 0) {
                 $SitecoreVersionsDisplay = $SitecoreVersions[0]
             }
                 
             if($SitecoreVersions.length -gt 1) {
-                $SitecoreVersionsDisplay = "$SitecoreVersionsDisplay - $($SitecoreVersions[$SitecoreVersions.length - 1])"
+                if($SitecoreVersions[0] -ne $SitecoreVersions[$SitecoreVersions.length - 1]) {
+                    $SitecoreVersionsDisplay = "$SitecoreVersionsDisplay - $($SitecoreVersions[$SitecoreVersions.length - 1])"
+                }
             }
                 
             $TestResult = Get-ResultObject -Title $Path -Outcome $PathResult -Details "StatusCode: $StatusCode, Matches: $SitecoreVersionsDisplay"
@@ -673,7 +679,12 @@ function Get-SitecoreSimpleFileCheck {
             }
         }
         else {
-            $SitecoreCertainty = "$($PossibleVersions[0]) - $($PossibleVersions[$PossibleVersions.length - 1])"
+            $SitecoreCertainty = $PossibleVersions[0]
+            if($PossibleVersions[0] -ne $PossibleVersions[$PossibleVersions.length - 1])
+            {
+                $SitecoreCertainty = "$SitecoreCertainty - $($PossibleVersions[$PossibleVersions.length - 1])"
+            }
+            
             $Result = $PASS
         }
         

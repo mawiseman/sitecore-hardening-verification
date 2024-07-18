@@ -62,7 +62,7 @@ i.e. The site grants access to `/sitecore/login` from your offices IP address wh
 See [\examples\report-example.ps1](/examples/report-example.ps1) for the most recent example script
 
 ```powershell
-Import-Module ..\src\sitecore-hardening-report.psm1
+Import-Module .\src\sitecore-hardening-report.psm1
 
 $Urls = @(
     "https://sitecore.com"
