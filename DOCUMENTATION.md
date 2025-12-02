@@ -116,4 +116,3 @@ Contains **known-good file hashes** for version fingerprinting:
 
 1. **Hardcoded paths:** Output paths (`c:\temp\`) are hardcoded in report.ps1 lines 20-24
 3. **Error handling:** Some exception handling silently continues without logging
-5. **CSV generation:** Manual string concatenation instead of `Export-Csv`
