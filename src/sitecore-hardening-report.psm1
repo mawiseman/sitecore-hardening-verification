@@ -174,7 +174,7 @@ function Get-SitecoreVersion {
     }
 }
 
-function Get-HardeningResultDenyAnonomousAccess {
+function Get-HardeningResultDenyAnonymousAccess {
     <#
     .SYNOPSIS
         Test Deny Anomous Access
@@ -265,7 +265,7 @@ function Get-HardeningResultDenyAnonomousAccess {
         
         # Results
 
-        Get-ResultObject -Title "Deny Anonomous Access" -Outcome $Result -Tests $TestResults
+        Get-ResultObject -Title "Deny Anonymous Access" -Outcome $Result -Tests $TestResults
     }
 }
    
@@ -481,16 +481,17 @@ function Get-HardeningResultUnsupportedLanguages {
             }
             
             $LanguageResult = $FAIL
+            $ExpectedStatusMessage = ""
 
             if ($StatusCode -eq $Language.expectedStatusCode) {
                 $LanguageResult = $PASS
-            } 
+            }
             else {
-                $ExpectedStatusMessage = "Expected: $($Language.expectedStatusCode)"
+                $ExpectedStatusMessage = " Expected: $($Language.expectedStatusCode)"
                 $Result = $FAIL
             }
 
-            $TestResult = Get-ResultObject -Title $Language.languageCode -Outcome $LanguageResult -Details "StatusCode: $StatusCode $ExpectedStatusMessage"
+            $TestResult = Get-ResultObject -Title $Language.languageCode -Outcome $LanguageResult -Details "StatusCode: $StatusCode$ExpectedStatusMessage"
             $TestResults += , $TestResult
         }
         
@@ -739,25 +740,25 @@ function Get-HardeningChecks {
             # make sure we can connect to the site (or the redirected site) before running the tests
             if ($RedirectUrl -notlike "*(Unable to connect)") {
                 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 2 of $($Tests): Checking Force Https" -PercentComplete ((6 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultForceHttpsRedirect -Url $RedirectUrl 
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 2 of $($Tests): Checking Force Https" -PercentComplete ((2 / $Tests) * 100) -ParentId 1
+                $SiteResults += Get-HardeningResultForceHttpsRedirect -Url $RedirectUrl
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 3 of $($Tests): Checking Sitecore Version" -PercentComplete ((2 / $Tests) * 100) -ParentId 1
-                $SitecoreVersion = Get-SitecoreVersion -Url $RedirectUrl  
-                
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 4 of $($Tests): Checking Deny Anonomous Access" -PercentComplete ((3 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultDenyAnonomousAccess -Url $RedirectUrl
-                
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 5 of $($Tests): Checking Limit Access to XSL" -PercentComplete ((4 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultLimitAccessToXSL -Url $RedirectUrl 
-                
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 6 of $($Tests): Checking Remove Headers" -PercentComplete ((5 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultRemoveHeaders -Url $RedirectUrl 
-                
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 3 of $($Tests): Checking Sitecore Version" -PercentComplete ((3 / $Tests) * 100) -ParentId 1
+                $SitecoreVersion = Get-SitecoreVersion -Url $RedirectUrl
+
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 4 of $($Tests): Checking Deny Anonymous Access" -PercentComplete ((4 / $Tests) * 100) -ParentId 1
+                $SiteResults += Get-HardeningResultDenyAnonymousAccess -Url $RedirectUrl
+
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 5 of $($Tests): Checking Limit Access to XSL" -PercentComplete ((5 / $Tests) * 100) -ParentId 1
+                $SiteResults += Get-HardeningResultLimitAccessToXSL -Url $RedirectUrl
+
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 6 of $($Tests): Checking Remove Headers" -PercentComplete ((6 / $Tests) * 100) -ParentId 1
+                $SiteResults += Get-HardeningResultRemoveHeaders -Url $RedirectUrl
+
                 Write-Progress -Activity $ReportProgressActivity -Status "Step: 7 of $($Tests): Sitecore Simple File Check" -PercentComplete ((7 / $Tests) * 100) -ParentId 1
                 $SiteResults += Get-SitecoreSimpleFileCheck -Url $RedirectUrl
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 8 of $($Tests): Handle Unsupported Languages Check" -PercentComplete ((7 / $Tests) * 100) -ParentId 1
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 8 of $($Tests): Handle Unsupported Languages Check" -PercentComplete ((8 / $Tests) * 100) -ParentId 1
                 $SiteResults += Get-HardeningResultUnsupportedLanguages -Url $RedirectUrl 
             }
            
@@ -1077,40 +1078,29 @@ function Write-CsvReport {
         $DetailedReport
     )
     process {
-        # Write CSV Header
-
-        $Row = "SiteUrl, RedirectUrl, SitecoreVersion, "
-
-        foreach ($SiteResult in $SiteReports[0].SiteResults) {
-            $Row += "$($SiteResult.Title) Summary, "
-
-            if($true -eq $DetailedReport) {
-                foreach ($Test in $SiteResult.Tests) {
-                    $Row += "$($SiteResult.Title) ($($Test.Title)), "
-                }
-            }
-        }
-
-        Add-Content $CsvFilePath $Row
-
-        # Write CSV Results
+        $CsvRows = @()
 
         foreach ($SiteReport in $SiteReports) {
-
-            $Row = "$($SiteReport.SiteUrl), $($SiteReport.RedirectUrl), $($SiteReport.SitecoreVersion), "
+            $RowData = [ordered]@{
+                SiteUrl = $SiteReport.SiteUrl
+                RedirectUrl = $SiteReport.RedirectUrl
+                SitecoreVersion = $SiteReport.SitecoreVersion
+            }
 
             foreach ($SiteResult in $SiteReport.SiteResults) {
-                $Row += "$($SiteResult.Outcome), "
+                $RowData["$($SiteResult.Title) Summary"] = $SiteResult.Outcome
 
-                if($true -eq $DetailedReport) {
+                if ($true -eq $DetailedReport) {
                     foreach ($Test in $SiteResult.Tests) {
-                        $Row += "$($Test.Outcome) - $($Test.Details), "
+                        $RowData["$($SiteResult.Title) ($($Test.Title))"] = "$($Test.Outcome) - $($Test.Details)"
                     }
                 }
             }
 
-            Add-Content $CsvFilePath $Row
+            $CsvRows += [PSCustomObject]$RowData
         }
+
+        $CsvRows | Export-Csv -Path $CsvFilePath -NoTypeInformation
     }
 }
 
