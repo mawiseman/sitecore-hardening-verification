@@ -14,13 +14,12 @@ This is a **security audit toolkit** for Sitecore CMS websites. It performs auto
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `-Url` | string | Yes | (prompts) | Target URL to scan |
-| `-Format` | string | No | `Console` | Output format: `Console`, `Html`, or `Csv` |
+| `-Format` | string | No | `Console` | Output format: `Console` or `Csv` |
 
 **Functionality:**
 1. Imports the main module `sitecore-hardening-report.psm1`
 2. Routes to appropriate report function based on format:
    - `Console` → `Invoke-ConsoleReport`
-   - `Html` → `Invoke-HtmlReport` (outputs to `c:\temp\`)
    - `Csv` → `Invoke-CsvReport` (outputs to `c:\temp\report.csv`)
 
 ---
@@ -83,11 +82,8 @@ This is a **security audit toolkit** for Sitecore CMS websites. It performs auto
 | `Invoke-ConsoleReport` | 783-801 | Entry point for console output |
 | `Show-ConsoleReport` | 803-859 | Renders colored console output |
 | `Write-ConsoleReportResult` | 861-893 | Helper for formatted console line output |
-| `Invoke-HtmlReport` | 895-943 | Entry point for HTML reports, supports split results per URL |
-| `Save-HtmlReport` | 945-993 | Generates HTML using Mustache templates |
-| `Save-HtmlReportIndex` | 995-1035 | Creates index page for split HTML reports |
-| `Invoke-CsvReport` | 1037-1061 | Entry point for CSV output |
-| `Write-CsvReport` | 1063-1115 | Writes CSV with optional detailed columns |
+| `Invoke-CsvReport` | 897-921 | Entry point for CSV output |
+| `Write-CsvReport` | 923-965 | Writes CSV with optional detailed columns |
 
 ---
 

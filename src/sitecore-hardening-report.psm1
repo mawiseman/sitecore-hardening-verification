@@ -445,22 +445,15 @@ function Get-HardeningResultUnsupportedLanguages {
     )
     process {
         $Result = $PASS
-        
+        $TestResults = @()
+
         # Perform Tests
-    
-        $Languages = @()
-        $Languages += [PSCustomObject]@{
-            languageCode = "en"
-            expectedStatusCode = 200
-        }
-        $Languages += [PSCustomObject]@{
-            languageCode = "om"
-            expectedStatusCode = 404
-        }
-        $Languages += [PSCustomObject]@{
-            languageCode = "br"
-            expectedStatusCode = 404
-        }
+
+        $Languages = @(
+            [PSCustomObject]@{ languageCode = "en"; expectedStatusCode = 200 }
+            [PSCustomObject]@{ languageCode = "om"; expectedStatusCode = 404 }
+            [PSCustomObject]@{ languageCode = "br"; expectedStatusCode = 404 }
+        )
 
         foreach ($Language in $Languages) {
             $TestUri = Join-Uri $Url $Language.languageCode
@@ -672,9 +665,10 @@ function Get-SitecoreSimpleFileCheck {
         if ($PossibleVersions.length -eq 0) {
             # If there are no "PossibleVersions" then lets generate a certainty based on the matched files
             
-            $FilesFound = $TestResults.GetEnumerator() | Where-Object { $_.Outcome -like "*$PASS" }
-            $SitecoreCertainty = "$([math]::Round($($FilesFound.length / $Paths.count) * 100))%"
-            
+            $FilesFound = @($TestResults | Where-Object { $_.Outcome -like "*$PASS" })
+            $PercentHitRate = [math]::Round(($FilesFound.Count / $Paths.Count) * 100)
+            $SitecoreCertainty = "$PercentHitRate%"
+
             if ($PercentHitRate -gt 80) {
                 $Result = $PASS
             }
@@ -890,148 +884,6 @@ function Write-ConsoleReportResult {
         }
 
         Write-Host ""
-    }
-}
-
-function Invoke-HtmlReport {
-    <#
-    .SYNOPSIS
-        Retirves report data for the provided URLs and Shos the result
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $True)]
-        [Array]
-        $Urls,
-        [String]
-        $OutputFolderPath,
-        [Boolean]
-        $SplitResults
-    )
-    process {
-        # Get Report Data
-
-        $SiteReports = $(Get-HardeningChecks -Urls $Urls)
-
-        # Write Report
-
-        if ($SplitResults) {
-
-            $HtmlReportFileNames = @()
-
-            # Generate the separate reports
-
-            foreach ($SiteReport in $SiteReports) {
-                $FileName = Remove-InvalidFileNameChars $SiteReport.SiteUrl
-                $FileName = $FileName -Replace 'https', '' -Replace 'http', ''
-
-                $DataViewFileName = "$FileName.json"
-                $HtmlReportFileName = "$FileName.html"
-
-                Save-HtmlReport -SiteReports $SiteReport -OutputFolderPath $OutputFolderPath -DataViewFileName $DataViewFileName -HtmlReportFileName $HtmlReportFileName
-           
-                $HtmlReportFileNames += , $HtmlReportFileName
-            }
-
-            # Generate index file
-
-            Save-HtmlReportIndex -HtmlReportFileNames $HtmlReportFileNames -OutputFolderPath $OutputFolderPath
-        }
-        else {
-            Save-HtmlReport -SiteReports $SiteReports -OutputFolderPath $OutputFolderPath
-        }
-    }
-}
-
-function Save-HtmlReport {
-    <#
-    .SYNOPSIS
-        Display a friendly version of the report
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $True)]
-        [Array]
-        $SiteReports,
-        [String]
-        $OutputFolderPath,
-        [String]
-        $DataViewFileName = "dataView.json",
-        [String]
-        $HtmlReportFileName = "report.html"
-    )
-    process {
-        $TemplatPath = Join-Path $PSScriptRoot "\html-report\report.mustache"
-        $DataViewFilePath = Join-Path $OutputFolderPath $DataViewFileName
-        $HtmlReportPath = Join-Path $OutputFolderPath $HtmlReportFileName
-
-        Write-Host "Data View File Path: $DataViewFilePath"
-        Write-Host "Template Path: $TemplatPath"
-        Write-Host "Html Report Path: $HtmlReportPath"
-
-        # Delete old files
-
-        if (Test-Path $DataViewFilePath) {
-            Remove-Item $DataViewFilePath
-        }
-
-        if (Test-Path $HtmlReportPath) {
-            Remove-Item $HtmlReportPath
-        }
-
-        # Save json file
-
-        $DataViewContent = $SiteReports | ConvertTo-Json -Depth 5
-        Add-Content $DataViewFilePath $DataViewContent
-
-        # Generate report
-        $MustacheCommand = "mustache $DataViewFilePath $TemplatPath > $HtmlReportPath"
-
-        Write-Verbose $MustacheCommand
-
-        Invoke-Expression $MustacheCommand
-    }
-}
-
-function Save-HtmlReportIndex {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $True)]
-        [Array]
-        $HtmlReportFileNames,
-        [String]
-        $OutputFolderPath        
-    )
-    process {
-        $TemplatPath = Join-Path $PSScriptRoot "\html-report\report-index.mustache"
-        $DataViewFilePath = Join-Path $OutputFolderPath "_index.json"
-        $HtmlReportPath = Join-Path $OutputFolderPath "_index.html"
-
-        Write-Host "Data View File Path: $DataViewFilePath"
-        Write-Host "Template Path: $TemplatPath"
-        Write-Host "Html Report Path: $HtmlReportPath"
-
-        # Delete old files
-
-        if (Test-Path $DataViewFilePath) {
-            Remove-Item $DataViewFilePath
-        }
-
-        if (Test-Path $HtmlReportPath) {
-            Remove-Item $HtmlReportPath
-        }
-
-        # Save json file
-
-        $DataViewContent = $HtmlReportFileNames | ConvertTo-Json
-        Add-Content $DataViewFilePath $DataViewContent
-
-        # Generate report
-        $MustacheCommand = "mustache $DataViewFilePath $TemplatPath > $HtmlReportPath"
-
-        Write-Verbose $MustacheCommand
-
-        Invoke-Expression $MustacheCommand
     }
 }
 

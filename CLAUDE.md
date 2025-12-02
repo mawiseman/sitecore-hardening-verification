@@ -18,7 +18,6 @@ See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed documentation including:
 - `report.ps1` - Entry point script, accepts `-Url` and `-Format` parameters
 - `sitecore-hardening-report.psm1` - Core module with all check logic and report generators
 - `sitecore/` - Contains known-good file hashes for Sitecore version fingerprinting
-- `html-report/` - Mustache templates for HTML report generation
 
 ## Running the Tool
 
