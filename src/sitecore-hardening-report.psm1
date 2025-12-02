@@ -143,8 +143,13 @@ function Get-SitecoreVersion {
 
         try {
 
-            $Response = Invoke-WebRequest -Uri $VersionUrl -UseBasicParsing -ErrorAction silentlycontinue -MaximumRedirection 1 -ErrorVariable siteIsNotAlive 
-    
+            $Response = Invoke-WebRequest -Uri $VersionUrl -UseBasicParsing -ErrorAction SilentlyContinue -MaximumRedirection 1
+
+            if ($null -eq $Response) {
+                $Version = "Unable to connect"
+                return $Version
+            }
+
             #the version response has some weird characters
             $Content = $Response.Content.Replace("ï»¿", "")
     
@@ -296,12 +301,14 @@ function Get-HardeningResultLimitAccessToXSL {
 
             $TestUri = Join-Uri $Url $Path
             
-            $StatusCode = '';
+            $StatusCode = 0
 
             try {
-                $Response = Invoke-WebRequest -Uri $TestUri.AbsoluteUri -UseBasicParsing -ErrorAction silentlycontinue -ErrorVariable siteIsNotAlive 
-                
-                $StatusCode = $Response.StatusCode
+                $Response = Invoke-WebRequest -Uri $TestUri.AbsoluteUri -UseBasicParsing -ErrorAction SilentlyContinue
+
+                if ($null -ne $Response) {
+                    $StatusCode = $Response.StatusCode
+                }
             }
             catch {
                 $StatusCode = $($_.Exception.Response).StatusCode
@@ -353,31 +360,35 @@ function Get-HardeningResultRemoveHeaders {
         )
 
         try {
-            $Response = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction silentlycontinue -ErrorVariable siteIsNotAlive 
+            $Response = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction SilentlyContinue
 
-            foreach ($Header in $Headers) {
-
-                $HeaderResult = $PASS
-
-                $Details = "Removed: $true"
-
-                if ($null -ne $Response.Headers[$Header]) {
-                    $HeaderResult = $FAIL
-                    $Details = "Removed: $false"
-                }
-
-                if ($HeaderResult -eq $FAIL) {
-                    $Result = $FAIL
-                }
-
-                $TestResult = Get-ResultObject -Title $Header -Outcome $HeaderResult -Details $Details
+            if ($null -eq $Response) {
+                $TestResult = Get-ResultObject -Title "Connection" -Outcome $FAIL -Details "Unable to connect"
                 $TestResults += , $TestResult
+                $Result = $FAIL
+            }
+            else {
+                foreach ($Header in $Headers) {
+                    $HeaderResult = $PASS
+                    $Details = "Removed: $true"
+
+                    if ($null -ne $Response.Headers[$Header]) {
+                        $HeaderResult = $FAIL
+                        $Details = "Removed: $false"
+                    }
+
+                    if ($HeaderResult -eq $FAIL) {
+                        $Result = $FAIL
+                    }
+
+                    $TestResult = Get-ResultObject -Title $Header -Outcome $HeaderResult -Details $Details
+                    $TestResults += , $TestResult
+                }
             }
         }
         catch {
             $TestResult = Get-ResultObject -Title "Exception" -Outcome $FAIL -Details $_.Exception.Response.StatusCode.Value__
             $TestResults += , $TestResult
-
             $Result = $FAIL
         }
 
@@ -408,7 +419,7 @@ function Get-HardeningResultForceHttpsRedirect {
         $Details = ""
         # Perform Tests
     
-        $Url = $Url -replace "https", "http"
+        $Url = $Url -replace "^https://", "http://"
     
         try {
             $Request = [System.Net.WebRequest]::Create($Url)
@@ -462,8 +473,11 @@ function Get-HardeningResultUnsupportedLanguages {
             $StatusCode = 0
 
             try {
-                $Response = Invoke-WebRequest -Uri $TestUrl -UseBasicParsing -ErrorAction silentlycontinue -MaximumRedirection 1 -ErrorVariable siteIsNotAlive 
-                $StatusCode = [int]$Response.StatusCode
+                $Response = Invoke-WebRequest -Uri $TestUrl -UseBasicParsing -ErrorAction SilentlyContinue -MaximumRedirection 1
+
+                if ($null -ne $Response) {
+                    $StatusCode = [int]$Response.StatusCode
+                }
             }
             catch [System.Net.WebException] {
                 # Handles 401, 404 etc

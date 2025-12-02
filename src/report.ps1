@@ -3,7 +3,9 @@ param (
     [string]$Url = $( Read-Host "Input URL" ),
 
     [ValidateSet('Console', 'Csv')]
-    [string]$Format = "Console"
+    [string]$Format = "Console",
+
+    [string]$OutputPath = $env:TEMP
 )
 
 Import-Module ..\src\sitecore-hardening-report.psm1
@@ -12,11 +14,12 @@ $Urls = @(
     $Url
 )
 
-if($Format -eq 'Console') {
+if ($Format -eq 'Console') {
     Invoke-ConsoleReport -Urls $Urls
 }
 
-if($Format -eq 'Csv') {
-    Invoke-CsvReport -Urls $Urls -CsvFilePath "c:\temp\report.csv" -DetailedReport $false
+if ($Format -eq 'Csv') {
+    $CsvFilePath = Join-Path $OutputPath "report.csv"
+    Invoke-CsvReport -Urls $Urls -CsvFilePath $CsvFilePath -DetailedReport $false
 }
 
