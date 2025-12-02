@@ -142,37 +142,50 @@ function Get-SitecoreVersion {
         $VersionUrl = $VersionUri.AbsoluteUri
 
         try {
-
-            $Response = Invoke-WebRequest -Uri $VersionUrl -UseBasicParsing -ErrorAction SilentlyContinue -MaximumRedirection 1
-
-            if ($null -eq $Response) {
-                $Version = "Unable to connect"
-                return $Version
+            $Response = Invoke-WebRequest -Uri $VersionUrl -UseBasicParsing -ErrorAction Stop -MaximumRedirection 1
+        }
+        catch {
+            $StatusCode = $null
+            if ($_.Exception.Response) {
+                $StatusCode = [int]$_.Exception.Response.StatusCode
             }
 
-            #the version response has some weird characters
-            $Content = $Response.Content.Replace("ï»¿", "")
-    
+            if ($StatusCode -eq 401 -or $StatusCode -eq 403) {
+                $Version = "Probably Sitecore: HTTP $StatusCode"
+            }
+            elseif ($StatusCode) {
+                $Version = "HTTP $StatusCode"
+            }
+            else {
+                $Version = "Connection failed"
+            }
+            return $Version
+        }
+
+        # Check if we got a valid response
+        if ($null -eq $Response) {
+            $Version = "No response"
+            return $Version
+        }
+
+        $StatusCode = [int]$Response.StatusCode
+        if ($StatusCode -ne 200) {
+            $Version = "HTTP $StatusCode"
+            return $Version
+        }
+
+        # Try to parse the XML version file
+        try {
+            $Content = $Response.Content -replace '^\xEF\xBB\xBF', '' -replace 'ï»¿', ''
             $Xml = [xml]$Content
-        
             $Version = "$($Xml.information.version.major).$($Xml.information.version.minor).$($Xml.information.version.revision)"
-        
-            if (-not($Version)) {
+
+            if (-not($Version) -or $Version -eq "..") {
                 $Version = "Unknown"
             }
         }
-        catch [System.Net.WebException] {
-            $StatusCode = $_.Exception.Response.StatusCode.Value__
-
-            if($StatusCode -eq 401 -or $StatusCode -eq 403) {
-                $Version = "Probably Sitecore: $StatusCode"
-            }
-            else {
-                $Version = "Unknown version"            
-            }
-        }
-        catch {            
-            $Version = "Unhandled Exception"
+        catch {
+            $Version = "Invalid XML response"
         }
 
         $Version
