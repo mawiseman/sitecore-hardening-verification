@@ -717,6 +717,87 @@ function Get-SitecoreSimpleFileCheck {
     }
 }
 
+function Get-HardeningResultIsXMCloud {
+    <#
+    .SYNOPSIS
+        Check if site is running on Sitecore XM Cloud
+    .DESCRIPTION
+        XM Cloud sites using Next.js include a script tag with id "__NEXT_DATA__"
+        containing a JSON object. Detection versions:
+        - v1: props.pageProps.sitecoreContext
+        - v2: props.layoutData.sitecore
+        - v3: JSON contains "sitecore" string (fallback)
+    #>
+    [OutputType([psobject])]
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $True)]
+        [String]
+        $Url
+    )
+    process {
+        $Result = $FAIL
+        $Details = "Not XM Cloud"
+
+        try {
+            $Response = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction Stop
+
+            if ($null -ne $Response -and $Response.StatusCode -eq 200) {
+                $Content = $Response.Content
+
+                # Look for script tag with id="__NEXT_DATA__"
+                if ($Content -match '<script\s+id="__NEXT_DATA__"[^>]*>(.*?)</script>') {
+                    $JsonContent = $Matches[1]
+
+                    try {
+                        $JsonData = $JsonContent | ConvertFrom-Json
+
+                        # v1: Check for sitecoreContext in props.pageProps
+                        if ($null -ne $JsonData.props -and
+                            $null -ne $JsonData.props.pageProps -and
+                            $null -ne $JsonData.props.pageProps.sitecoreContext) {
+                            $Result = $PASS
+                            $Details = "XM Cloud detected - v1"
+                        }
+                        # v2: Check for sitecore in props.layoutData
+                        elseif ($null -ne $JsonData.props -and
+                            $null -ne $JsonData.props.pageProps -and
+                            $null -ne $JsonData.props.pageProps.layoutData -and
+                            $null -ne $JsonData.props.pageProps.layoutData.sitecore) {
+                            $Result = $PASS
+                            $Details = "XM Cloud detected - v2"
+                        }
+                        # v3: Fallback - search for "sitecore" in the JSON content
+                        elseif ($JsonContent -match '"sitecore"') {
+                            $Result = $PASS
+                            $Details = "XM Cloud detected - unknown"
+                        }
+                        else {
+                            $Details = "Next.js found but no Sitecore data"
+                        }
+                    }
+                    catch {
+                        $Details = "Next.js found but invalid JSON"
+                    }
+                }
+                else {
+                    $Details = "No __NEXT_DATA__ script found"
+                }
+            }
+        }
+        catch {
+            $StatusCode = $null
+            if ($_.Exception.Response) {
+                $StatusCode = [int]$_.Exception.Response.StatusCode
+            }
+            $Details = "Request failed: HTTP $StatusCode"
+        }
+
+        # Results
+        Get-ResultObject -Title "Is XM Cloud" -Outcome $Result -Details $Details
+    }
+}
+
 function Get-HardeningChecks {
     <#
     .SYNOPSIS
@@ -748,7 +829,7 @@ function Get-HardeningChecks {
         for ($I = 0; $I -lt $SiteUrls.length; $I++) {
 
             $SiteUrl = $SiteUrls[$I]
-            $Tests = 8
+            $Tests = 9
 
             $SiteResults = @()
             $SitecoreVersion = "Unknown"
@@ -780,7 +861,10 @@ function Get-HardeningChecks {
                 $SiteResults += Get-SitecoreSimpleFileCheck -Url $RedirectUrl
 
                 Write-Progress -Activity $ReportProgressActivity -Status "Step: 8 of $($Tests): Handle Unsupported Languages Check" -PercentComplete ((8 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultUnsupportedLanguages -Url $RedirectUrl 
+                $SiteResults += Get-HardeningResultUnsupportedLanguages -Url $RedirectUrl
+
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 9 of $($Tests): Checking Is XM Cloud" -PercentComplete ((9 / $Tests) * 100) -ParentId 1
+                $SiteResults += Get-HardeningResultIsXMCloud -Url $RedirectUrl
             }
            
             if ($RedirectUrl -eq $SiteUrl) {
