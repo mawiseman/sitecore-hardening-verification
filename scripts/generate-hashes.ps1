@@ -1,9 +1,9 @@
 # generate-hashes.ps1
-# Generates version-hashes.json for the Chrome extension from the sitecore fingerprint files.
-# Run this script whenever new Sitecore version files are added to powershell/sitecore/.
+# Generates version-hashes.json from the sitecore fingerprint files in data/sitecore/.
+# Run this script whenever new Sitecore version files are added to data/sitecore/.
 
 param (
-    [string]$SourcePath = (Join-Path $PSScriptRoot "..\powershell\sitecore"),
+    [string]$SourcePath = (Join-Path $PSScriptRoot "..\data\sitecore"),
     [string]$OutputPath = (Join-Path $PSScriptRoot "..\chrome-extension\data\version-hashes.json")
 )
 
@@ -84,7 +84,8 @@ if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
 
-$Output | ConvertTo-Json -Depth 5 | Out-File -FilePath $OutputPath -Encoding UTF8
+$Json = $Output | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText($OutputPath, $Json, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host "Generated: $OutputPath"
 Write-Host "  Versions processed: $VersionCount"

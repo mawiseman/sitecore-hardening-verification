@@ -81,6 +81,6 @@ Invoke-CsvReport -Urls $Urls -CsvFilePath "C:\temp\report.csv" -DetailedReport $
 
 ## Version Fingerprinting
 
-The `sitecore/` folder contains known-good copies of `webedit.css`, `default.css`, and `default.js` for Sitecore versions 8.0 through 10.4. During a scan, the tool downloads these files from the target site, computes SHA256 hashes, and compares them against the local copies to identify the exact Sitecore version.
+The `data/sitecore/` folder (at the repository root) contains known-good copies of `webedit.css`, `default.css`, and `default.js` for Sitecore versions 8.0 through 10.4. Pre-computed SHA256 hashes are stored in `chrome-extension/data/version-hashes.json`, which is used by all three tools (PowerShell, Chrome extension, and Node.js CLI).
 
-To add a new version, create a folder at `sitecore/v{version}/Sitecore {version} rev. {revision}/` containing the three files.
+To add a new version, create a folder at `data/sitecore/v{version}/Sitecore {version} rev. {revision}/` containing the three files, then run `scripts/generate-hashes.ps1` to regenerate the hash JSON.

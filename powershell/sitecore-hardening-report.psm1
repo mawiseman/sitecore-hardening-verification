@@ -3,6 +3,7 @@
 
 Set-Variable PASS -option Constant -value 'Pass' -ErrorAction SilentlyContinue
 Set-Variable FAIL -option Constant -value 'Fail' -ErrorAction SilentlyContinue
+Set-Variable WARN -option Constant -value 'Warn' -ErrorAction SilentlyContinue
 
 # Functions
 
@@ -526,8 +527,8 @@ function Get-SitecoreSimpleFileCheck {
     .SYNOPSIS
         Provide a measure of simple files that Sitecore normally includes
     .DESCRIPTION
-        Becase a site can be locked down really well, all tests might pass and we just dont know if it's sitecore or not.
-        We do know that sitecore _typically_ has a few files in the root that we can check for
+        Downloads known static Sitecore files (webedit.css, default.css, default.js),
+        computes SHA256 hashes, and matches against pre-computed version-hashes.json.
     #>
     [OutputType([psobject])]
     [CmdletBinding()]
@@ -537,162 +538,81 @@ function Get-SitecoreSimpleFileCheck {
         $Url
     )
     process {
-        $Result = "0%"
         $TestResults = @()
-        
-        # Preform Test
-    
-        ## Check known static Sitecore files
 
-        $Paths = @(
-            "webedit.css"
-            "default.css"
-            "default.js"
-        )
+        $Paths = @("webedit.css", "default.css", "default.js")
 
-        $FullHash = "";
-        $VersionHashes = [ordered]@{};
+        # Load pre-computed version hashes
+        $HashJsonPath = Join-Path $PSScriptRoot "..\chrome-extension\data\version-hashes.json"
+        $VersionHashData = Get-Content $HashJsonPath -Raw | ConvertFrom-Json
+
+        $FullHash = ""
 
         foreach ($Path in $Paths) {
             $TestUri = Join-Uri $Url $Path
             $TestUrl = $TestUri.AbsoluteUri
-                
+
             $StatusCode = 0
-                
             $SitecoreVersions = @()
-                
+
             try {
                 $Request = [System.Net.WebRequest]::Create($TestUrl)
                 $Response = $Request.GetResponse()
-                        
                 $StatusCode = [int]$Response.StatusCode
-                 
-                # Get the stream hash - for the next test
-            
+
+                # Compute SHA256 hash of the response
                 $ResponseStream = $Response.GetResponseStream()
-                $ResponseHash = $(Get-FileHash -InputStream $ResponseStream).Hash
+                $sha256 = [System.Security.Cryptography.SHA256]::Create()
+                $hashBytes = $sha256.ComputeHash($ResponseStream)
+                $ResponseHash = ($hashBytes | ForEach-Object { $_.ToString("X2") }) -join ""
+                $sha256.Dispose()
+
                 $FullHash += $Path + $ResponseHash
-    
-                # Find all the files that match
-            
-                $StartPath = Get-Location
-            
-                $AllFiles = Get-ChildItem -Path $StartPath -Recurse -Directory | Sort-Object -Property FullName -Descending
-            
-                $AllFiles | ForEach-Object {
-                            
-                    # Get all the files that match the name
-            
-                    $MatchingFiles = Get-ChildItem -Path $_.FullName -File | Where-Object { $_.Name -eq $Path }
-                            
-                    foreach ($MatchingFile in $MatchingFiles) {
-                        $VersionName = $($_.Name -Replace "Sitecore", "").Trim()
-                        
-                        $MatchingFileHash = $(Get-FileHash $MatchingFile.FullName).Hash
-                                
-                        If($MatchingFileHash -eq $ResponseHash) {
-                                
-                            if($VersionName -ne "") {
-                                $SitecoreVersions += , $VersionName
-                            }
-                        }
-                    }   
+
+                # Look up per-file matches from version-hashes.json
+                $FileHashes = $VersionHashData.files.$Path
+                if ($FileHashes -and $FileHashes.$ResponseHash) {
+                    $SitecoreVersions = @($FileHashes.$ResponseHash)
                 }
-                
+
                 $Response.Close()
                 $Response.Dispose()
             }
             catch [System.Net.WebException] {
-                # Handles 401, 404 etc
                 $StatusCode = $($_.Exception.Response.StatusCode.Value__)
             }
             catch {
                 $StatusCode = 500
-                write-host $_.Exception
             }
-                            
+
             $PathResult = $PASS
-                
             if ($StatusCode -ne 200) {
                 $PathResult = $FAIL
             }
-                
+
             $SitecoreVersionsDisplay = "Unknown"
-            
-            #Sort the versions
-            $SitecoreVersions = $SitecoreVersions | Sort-Object {
-                $_ -split " rev" | Select-Object -Index 0 | %{ [Version]($_) }
+            if ($SitecoreVersions.Count -gt 0) {
+                $First = $SitecoreVersions[0]
+                $Last = $SitecoreVersions[$SitecoreVersions.Count - 1]
+                $SitecoreVersionsDisplay = if ($First -eq $Last) { $First } else { "$First - $Last" }
             }
 
-            if($SitecoreVersions.length -gt 0) {
-                $SitecoreVersionsDisplay = $SitecoreVersions[0]
-            }
-                
-            if($SitecoreVersions.length -gt 1) {
-                if($SitecoreVersions[0] -ne $SitecoreVersions[$SitecoreVersions.length - 1]) {
-                    $SitecoreVersionsDisplay = "$SitecoreVersionsDisplay - $($SitecoreVersions[$SitecoreVersions.length - 1])"
-                }
-            }
-                
-            $TestResult = Get-ResultObject -Title $Path -Outcome $PathResult -Details "StatusCode: $StatusCode, Matches: $SitecoreVersionsDisplay"
-            $TestResults += , $TestResult
+            $TestResults += Get-ResultObject -Title $Path -Outcome $PathResult -Details "StatusCode: $StatusCode, Matches: $SitecoreVersionsDisplay"
         }
-        
-        # Build local hashes
-        
-        $StartPath = Get-Location
-        $AllFiles = Get-ChildItem -Path $StartPath -Recurse -Directory | Sort-Object -Property FullName -Descending
-        
-        foreach ($Path in $Paths) {
-        
-            $AllFiles | ForEach-Object {
-                              
-                # Get all the files that match the name
-                
-                $MatchingFiles = Get-ChildItem -Path $_.FullName -File | Where-Object { $_.Name -eq $Path }
-                              
-                foreach ($MatchingFile in $MatchingFiles) {
-                    $VersionName = $_.Name -Replace "Sitecore", ""
-                    
-                    $MatchingFileHash = $(Get-FileHash $MatchingFile.FullName).Hash
-                        
-                    if (-not $VersionHashes.Contains($VersionName)) {
-                        $VersionHashes.Add($VersionName, "")
-                    }
-        
-                    $VersionHashes[$VersionName] += $Path + $MatchingFileHash
-                    
-                }
-        
-            }
-        }
-        
-        # Check for version matches
-        
-        $PossibleVersions = @()
-        
-        foreach ($Key in $VersionHashes.Keys) {
-        
-            if( $VersionHashes[$Key] -eq $FullHash) {
-                $PossibleVersions += $Key
-            }
-        }
-        
-        ## Check some urls that would return a 404 in non Sitecore Sites
 
-        # check /sitecore
-        # if 200 and url is still /sitecore: Is Sitecore
-        # if 403 or 401 this is sitecore but hardened: Is Sitecore
-        # else Is (probably) Not Sitecore
-        
-        # Calculate the probability that this site is Sitecore
-        
+        # Check composite hash match
         $Result = $FAIL
-         
-        if ($PossibleVersions.length -eq 0) {
-            # If there are no "PossibleVersions" then lets generate a certainty based on the matched files
-            
-            $FilesFound = @($TestResults | Where-Object { $_.Outcome -like "*$PASS" })
+        $CompositeMatches = $VersionHashData.composites.$FullHash
+
+        if ($CompositeMatches -and $CompositeMatches.Count -gt 0) {
+            $Result = $PASS
+            $First = $CompositeMatches[0]
+            $Last = $CompositeMatches[$CompositeMatches.Count - 1]
+            $SitecoreCertainty = if ($First -eq $Last) { $First } else { "$First - $Last" }
+        }
+        else {
+            # Fallback: percentage of files found
+            $FilesFound = @($TestResults | Where-Object { $_.Outcome -eq $PASS })
             $PercentHitRate = [math]::Round(($FilesFound.Count / $Paths.Count) * 100)
             $SitecoreCertainty = "$PercentHitRate%"
 
@@ -700,18 +620,6 @@ function Get-SitecoreSimpleFileCheck {
                 $Result = $PASS
             }
         }
-        else {
-            $SitecoreCertainty = $PossibleVersions[0]
-            if($PossibleVersions[0] -ne $PossibleVersions[$PossibleVersions.length - 1])
-            {
-                $SitecoreCertainty = "$SitecoreCertainty - $($PossibleVersions[$PossibleVersions.length - 1])"
-            }
-            
-            $Result = $PASS
-        }
-        
-
-        # Results
 
         Get-ResultObject -Title "Simple File Check" -Outcome $Result -Tests $TestResults -Details "Matches: $SitecoreCertainty"
     }
@@ -798,6 +706,168 @@ function Get-HardeningResultIsXMCloud {
     }
 }
 
+function Get-HardeningResultJssVersion {
+    <#
+    .SYNOPSIS
+        Identify the Sitecore JSS version by finding which page chunk contains sitecoreApiKey
+    .DESCRIPTION
+        Scans known Next.js chunk URL patterns to find the chunk containing sitecoreApiKey.
+        The chunk URL pattern indicates the JSS version:
+          JSS 22.*: _next/static/chunks/pages/_app-{hash}.js
+          JSS 21.*: _next/static/chunks/pages/%5B%5B...path%5D%5D-{hash}.js
+        Returns the result object plus the chunk JS content for the API key check to reuse.
+    #>
+    [OutputType([psobject])]
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $True)]
+        [String]
+        $Url
+    )
+    process {
+        $TestResults = @()
+
+        $ChunkPatterns = @(
+            @{ Label = "JSS 22.x"; Pattern = '["\u0027]([^"\u0027]*_next/static/chunks/pages/_app-[^"\u0027]+\.js[^"\u0027]*?)["\u0027]' },
+            @{ Label = "JSS 21.x"; Pattern = '["\u0027]([^"\u0027]*_next/static/chunks/pages/\[\[\.\.\.path\]\]-[^"\u0027]+\.js[^"\u0027]*?)["\u0027]' },
+            @{ Label = "JSS 21.x"; Pattern = '["\u0027]([^"\u0027]*_next/static/chunks/pages/%5B%5B\.\.\.path%5D%5D-[^"\u0027]+\.js[^"\u0027]*?)["\u0027]' }
+        )
+
+        try {
+            $PageResponse = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction Stop
+            $HtmlContent = $PageResponse.Content
+
+            # Collect all matching chunks with their version labels
+            $Chunks = @()
+            foreach ($Entry in $ChunkPatterns) {
+                if ($HtmlContent -match $Entry.Pattern) {
+                    $ChunkPath = $Matches[1]
+                    if ($ChunkPath -match '^https?://') {
+                        $ChunkUrl = $ChunkPath
+                    } else {
+                        $ChunkUrl = (Join-Uri $Url $ChunkPath).AbsoluteUri
+                    }
+                    $Chunks += @{ Label = $Entry.Label; Url = $ChunkUrl }
+                }
+            }
+
+            if ($Chunks.Count -eq 0) {
+                return @{
+                    Result = Get-ResultObject -Title "Sitecore JSS Version" -Outcome $WARN -Details "No page chunks found"
+                    JsContent = $null
+                    ChunkName = $null
+                }
+            }
+
+            # Fetch each chunk and find the one containing sitecoreApiKey
+            foreach ($Chunk in $Chunks) {
+                $ChunkName = ($Chunk.Url -split '/')[-1] -split '\?' | Select-Object -First 1
+
+                $ChunkResponse = Invoke-WebRequest -Uri $Chunk.Url -UseBasicParsing -ErrorAction Stop
+                $JsContent = $ChunkResponse.Content
+
+                if ($JsContent -notmatch 'sitecoreApiKey') {
+                    $TestResults += Get-ResultObject -Title $ChunkName -Outcome $WARN -Details "sitecoreApiKey not found"
+                    continue
+                }
+
+                # Found it
+                $TestResults += Get-ResultObject -Title $ChunkName -Outcome $PASS -Details "sitecoreApiKey found"
+
+                return @{
+                    Result = Get-ResultObject -Title "Sitecore JSS Version" -Outcome $PASS -Tests $TestResults -Details $Chunk.Label
+                    JsContent = $JsContent
+                    ChunkName = $ChunkName
+                }
+            }
+
+            # Not found in any chunk
+            return @{
+                Result = Get-ResultObject -Title "Sitecore JSS Version" -Outcome $WARN -Tests $TestResults -Details "sitecoreApiKey not found in any chunk"
+                JsContent = $null
+                ChunkName = $null
+            }
+        }
+        catch {
+            return @{
+                Result = Get-ResultObject -Title "Sitecore JSS Version" -Outcome $WARN -Details "Error: $($_.Exception.Message)"
+                JsContent = $null
+                ChunkName = $null
+            }
+        }
+    }
+}
+
+function Get-HardeningResultXMCloudApiKey {
+    <#
+    .SYNOPSIS
+        Check that the Sitecore API key is not exposed in the identified chunk
+    .DESCRIPTION
+        Analyses the JS content (already fetched by JSS version check) to verify
+        sitecoreApiKey is "" (empty string). An exposed key is a security issue.
+    #>
+    [OutputType([psobject])]
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $False)]
+        [String]
+        $JsContent,
+
+        [Parameter(Mandatory = $False)]
+        [String]
+        $ChunkName
+    )
+    process {
+        $TestResults = @()
+
+        if ([string]::IsNullOrEmpty($JsContent)) {
+            return Get-ResultObject -Title "XM Cloud API Key" -Outcome $WARN -Details "No chunk to analyse"
+        }
+
+        # Search for sitecoreApiKey assignments
+        $ExposedKeys = @()
+
+        $DirectMatches = [regex]::Matches($JsContent, 'sitecoreApiKey\s*[=:]\s*"([^"]*)"')
+        foreach ($Match in $DirectMatches) {
+            $Value = $Match.Groups[1].Value
+            if ($Value -ne "") {
+                $ExposedKeys += $Value
+            }
+        }
+
+        $FallbackMatches = [regex]::Matches($JsContent, 'sitecoreApiKey\s*=\s*[^"|]+\|\|\s*"([^"]*)"')
+        foreach ($Match in $FallbackMatches) {
+            $Value = $Match.Groups[1].Value
+            if ($Value -ne "") {
+                $ExposedKeys += $Value
+            }
+        }
+
+        $FoundAny = ($DirectMatches.Count -gt 0) -or ($FallbackMatches.Count -gt 0)
+
+        if (-not $FoundAny) {
+            $TestResults += Get-ResultObject -Title $ChunkName -Outcome $WARN -Details "sitecoreApiKey not found"
+            return Get-ResultObject -Title "XM Cloud API Key" -Outcome $WARN -Tests $TestResults -Details "sitecoreApiKey not found"
+        }
+
+        if ($ExposedKeys.Count -gt 0) {
+            $MaskedKeys = $ExposedKeys | ForEach-Object {
+                if ($_.Length -gt 8) {
+                    $_.Substring(0, 4) + "..." + $_.Substring($_.Length - 4)
+                } else {
+                    $_
+                }
+            }
+            $Details = "API key exposed: $($MaskedKeys -join ', ')"
+            $TestResults += Get-ResultObject -Title $ChunkName -Outcome $FAIL -Details $Details
+            return Get-ResultObject -Title "XM Cloud API Key" -Outcome $FAIL -Tests $TestResults -Details $Details
+        }
+
+        $TestResults += Get-ResultObject -Title $ChunkName -Outcome $PASS -Details 'Value: ""'
+        Get-ResultObject -Title "XM Cloud API Key" -Outcome $PASS -Tests $TestResults -Details "sitecoreApiKey is empty"
+    }
+}
+
 function Get-HardeningChecks {
     <#
     .SYNOPSIS
@@ -833,38 +903,53 @@ function Get-HardeningChecks {
 
             $SiteResults = @()
             $SitecoreVersion = "Unknown"
-            
+
             $ReportProgressActivity = "Report Progress ($I/$($SiteUrls.length)) - $SiteUrl"
 
             Write-Progress -Activity $ReportProgressActivity -Status "Step: 1 of $($Tests): Checking for Redirects" -PercentComplete ((1 / $Tests) * 100) -ParentId 1
             $RedirectUrl = Get-RedirectedUrl -Url $SiteUrl
-            
+
             # make sure we can connect to the site (or the redirected site) before running the tests
             if ($RedirectUrl -notlike "*(Unable to connect)") {
-                
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 2 of $($Tests): Checking Force Https" -PercentComplete ((2 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultForceHttpsRedirect -Url $RedirectUrl
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 3 of $($Tests): Checking Sitecore Version" -PercentComplete ((3 / $Tests) * 100) -ParentId 1
-                $SitecoreVersion = Get-SitecoreVersion -Url $RedirectUrl
+                # Check for XM Cloud first - if detected, skip XM/XP hardening checks
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 2 of $($Tests): Checking Is XM Cloud" -PercentComplete ((2 / $Tests) * 100) -ParentId 1
+                $XMCloudResult = Get-HardeningResultIsXMCloud -Url $RedirectUrl
+                $SiteResults += $XMCloudResult
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 4 of $($Tests): Checking Deny Anonymous Access" -PercentComplete ((4 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultDenyAnonymousAccess -Url $RedirectUrl
+                if ($XMCloudResult.Outcome -eq $PASS) {
+                    Write-Host "XM Cloud detected - running XM Cloud checks, skipping XM/XP hardening checks" -ForegroundColor Cyan
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 5 of $($Tests): Checking Limit Access to XSL" -PercentComplete ((5 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultLimitAccessToXSL -Url $RedirectUrl
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 3 of $($Tests): Checking Sitecore JSS Version" -PercentComplete ((3 / $Tests) * 100) -ParentId 1
+                    $JssVersionResult = Get-HardeningResultJssVersion -Url $RedirectUrl
+                    $SiteResults += $JssVersionResult.Result
+                    $SitecoreVersion = if ($JssVersionResult.Result.Details) { $JssVersionResult.Result.Details } else { "XM Cloud" }
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 6 of $($Tests): Checking Remove Headers" -PercentComplete ((6 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultRemoveHeaders -Url $RedirectUrl
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 4 of $($Tests): Checking XM Cloud API Key" -PercentComplete ((4 / $Tests) * 100) -ParentId 1
+                    $SiteResults += Get-HardeningResultXMCloudApiKey -JsContent $JssVersionResult.JsContent -ChunkName $JssVersionResult.ChunkName
+                }
+                else {
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 3 of $($Tests): Checking Force Https" -PercentComplete ((3 / $Tests) * 100) -ParentId 1
+                    $SiteResults += Get-HardeningResultForceHttpsRedirect -Url $RedirectUrl
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 7 of $($Tests): Sitecore Simple File Check" -PercentComplete ((7 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-SitecoreSimpleFileCheck -Url $RedirectUrl
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 4 of $($Tests): Checking Sitecore Version" -PercentComplete ((4 / $Tests) * 100) -ParentId 1
+                    $SitecoreVersion = Get-SitecoreVersion -Url $RedirectUrl
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 8 of $($Tests): Handle Unsupported Languages Check" -PercentComplete ((8 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultUnsupportedLanguages -Url $RedirectUrl
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 5 of $($Tests): Checking Deny Anonymous Access" -PercentComplete ((5 / $Tests) * 100) -ParentId 1
+                    $SiteResults += Get-HardeningResultDenyAnonymousAccess -Url $RedirectUrl
 
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 9 of $($Tests): Checking Is XM Cloud" -PercentComplete ((9 / $Tests) * 100) -ParentId 1
-                $SiteResults += Get-HardeningResultIsXMCloud -Url $RedirectUrl
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 6 of $($Tests): Checking Limit Access to XSL" -PercentComplete ((6 / $Tests) * 100) -ParentId 1
+                    $SiteResults += Get-HardeningResultLimitAccessToXSL -Url $RedirectUrl
+
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 7 of $($Tests): Checking Remove Headers" -PercentComplete ((7 / $Tests) * 100) -ParentId 1
+                    $SiteResults += Get-HardeningResultRemoveHeaders -Url $RedirectUrl
+
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 8 of $($Tests): Sitecore Simple File Check" -PercentComplete ((8 / $Tests) * 100) -ParentId 1
+                    $SiteResults += Get-SitecoreSimpleFileCheck -Url $RedirectUrl
+
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 9 of $($Tests): Handle Unsupported Languages Check" -PercentComplete ((9 / $Tests) * 100) -ParentId 1
+                    $SiteResults += Get-HardeningResultUnsupportedLanguages -Url $RedirectUrl
+                }
             }
            
             if ($RedirectUrl -eq $SiteUrl) {
@@ -934,6 +1019,9 @@ function Show-ConsoleReport {
             elseif($SiteReport.SitecoreVersion -like "*Probably*") {
                 $ValueForegroundColor = "Yellow"
             }
+            elseif($SiteReport.SitecoreVersion -eq "XM Cloud" -or $SiteReport.SitecoreVersion -like "JSS*") {
+                $ValueForegroundColor = "Cyan"
+            }
 
             Write-ConsoleReportResult "Sitecore Version" White $SiteReport.SitecoreVersion $ValueForegroundColor $null $Padding
             
@@ -944,6 +1032,9 @@ function Show-ConsoleReport {
                 $TitleForegroundColor = "Green"
                 if ($SiteResult.Outcome -eq $FAIL) {
                     $TitleForegroundColor = "Red"
+                }
+                elseif ($SiteResult.Outcome -eq $WARN) {
+                    $TitleForegroundColor = "DarkYellow"
                 }
 
                 Write-ConsoleReportResult $SiteResult.Title Yellow $SiteResult.Outcome $TitleForegroundColor $SiteResult.Details $Padding

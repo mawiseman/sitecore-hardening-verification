@@ -144,6 +144,10 @@ header h1 {
   background: #ef4444;
 }
 
+.badge-warn {
+  background: #f59e0b;
+}
+
 .check-title {
   flex: 1;
   font-weight: 500;
@@ -210,6 +214,14 @@ header h1 {
   padding: 6px 16px;
   background: #fefce8;
   color: #854d0e;
+  font-size: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.xm-cloud-notice {
+  padding: 10px 16px;
+  background: #eff6ff;
+  color: #1e40af;
   font-size: 12px;
   border-bottom: 1px solid #e2e8f0;
 }

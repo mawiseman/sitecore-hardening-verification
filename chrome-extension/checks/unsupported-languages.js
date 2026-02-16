@@ -1,9 +1,9 @@
 import { PASS, FAIL, createResult } from './result.js';
 
 const LANGUAGES = [
-  { code: 'en', expectedStatus: 200 },
   { code: 'om', expectedStatus: 404 },
   { code: 'br', expectedStatus: 404 },
+  { code: 'en', expectedStatus: 200 },
 ];
 
 export async function checkUnsupportedLanguages(baseUrl) {

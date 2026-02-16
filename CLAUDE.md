@@ -17,7 +17,6 @@ powershell/                          # PowerShell CLI toolkit
   report-multiple.ps1                # Batch check multiple URLs
   report-multiple-csv.ps1            # Batch check from CSV input
   sitecore-hardening-report.psm1     # Core module with all check logic
-  sitecore/                          # Known-good file hashes for version fingerprinting
 
 chrome-extension/                    # Chrome Extension (Manifest V3)
   manifest.json                      # Extension config
@@ -25,7 +24,7 @@ chrome-extension/                    # Chrome Extension (Manifest V3)
   service-worker.js                  # Background service worker
   checks/                            # Individual check modules (ES modules)
     check-runner.js                  # Orchestrator
-    result.js                        # Shared PASS/FAIL constants and result factory
+    result.js                        # Shared PASS/FAIL/WARN constants and result factory
     sitecore-version.js              # Version detection
     force-https.js                   # HTTPS redirect check
     deny-anonymous.js                # Anonymous access check
@@ -34,11 +33,19 @@ chrome-extension/                    # Chrome Extension (Manifest V3)
     simple-file-check.js             # File hash fingerprinting
     unsupported-languages.js         # Language handling check
     xm-cloud.js                      # XM Cloud / JSS detection
+    jss-version.js                   # JSS version detection
+    xm-cloud-api-key.js             # XM Cloud API key exposure check
   data/
     version-hashes.json              # Pre-computed SHA256 hashes (generated)
 
+cli/                                 # Node.js CLI (reuses chrome-extension/checks/)
+  run.js                             # CLI entry point (Node.js 18+)
+
+data/                                # Shared data
+  sitecore/                          # Known-good files for version fingerprinting
+
 scripts/
-  generate-hashes.ps1                # Generates version-hashes.json from powershell/sitecore/
+  generate-hashes.ps1                # Generates version-hashes.json from data/sitecore/
 ```
 
 ## Documentation
@@ -54,6 +61,17 @@ See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed documentation including:
 cd powershell
 .\report.ps1 -Url "https://example.com" -Format Console
 .\report.ps1 -Url "https://example.com" -Format Csv
+```
+
+## Running the Node.js CLI
+
+Requires Node.js 18+. Reuses the Chrome extension's check modules directly.
+
+```bash
+node cli/run.js https://example.com
+node cli/run.js url1 url2 url3
+node cli/run.js --csv urls.csv
+node cli/run.js --csv urls.csv --output results.csv
 ```
 
 ## Loading the Chrome Extension
@@ -95,17 +113,17 @@ cd powershell
 - Functions use `Get-` prefix for checks that return data
 - Functions use `Invoke-` prefix for entry points that orchestrate work
 - All check functions return standardized `PSObject` via `Get-ResultObject`
-- Constants `$PASS` and `$FAIL` used for consistent outcome values
+- Constants `$PASS`, `$FAIL`, and `$WARN` used for consistent outcome values
 
 ### Chrome Extension
 - ES modules with `import`/`export` (enabled by `"type": "module"` in manifest)
 - Each check exports a single async function
 - Shared `createResult(title, outcome, tests, details)` factory in `result.js`
-- Constants `PASS` and `FAIL` mirror the PowerShell convention
+- Constants `PASS`, `FAIL`, and `WARN` mirror the PowerShell convention
 
 ## Regenerating Version Hashes
 
-When new Sitecore version fingerprint files are added to `powershell/sitecore/`:
+When new Sitecore version fingerprint files are added to `data/sitecore/`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/generate-hashes.ps1

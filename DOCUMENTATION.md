@@ -63,7 +63,7 @@ This is a **security audit toolkit** for Sitecore CMS websites. It performs auto
 | `Get-HardeningResultRemoveHeaders` | 330-388 | Checks if sensitive headers are removed: `X-Aspnet-Version`, `X-Powered-By`, `X-AspNetMvc-Version` | [Remove headers](https://doc.sitecore.com/developers/81/sitecore-experience-platform/en/remove-header-information-from-responses-sent-by-your-website.html) |
 | `Get-HardeningResultForceHttpsRedirect` | 390-432 | Verifies HTTP requests redirect to HTTPS | [Increase login security](https://doc.sitecore.com/developers/82/sitecore-experience-platform/en/increase-login-security.html) |
 | `Get-HardeningResultUnsupportedLanguages` | 434-501 | Tests if unsupported language codes (e.g., `/om`, `/br`) return 404 instead of 200 | Custom check |
-| `Get-SitecoreSimpleFileCheck` | 503-696 | **Version fingerprinting** - Compares hashes of static files (`webedit.css`, `default.css`, `default.js`) against known Sitecore version signatures stored in `/sitecore/` folder | Custom check |
+| `Get-SitecoreSimpleFileCheck` | 525-640 | **Version fingerprinting** - Compares SHA256 hashes of static files (`webedit.css`, `default.css`, `default.js`) against pre-computed hashes in `chrome-extension/data/version-hashes.json` | Custom check |
 
 ---
 
@@ -87,11 +87,13 @@ This is a **security audit toolkit** for Sitecore CMS websites. It performs auto
 
 ---
 
-### Supporting Data: /sitecore/ Folder
+### Supporting Data: data/sitecore/ Folder
 
-Contains **known-good file hashes** for version fingerprinting:
-- Versions covered: 8.0, 8.1, 8.2, 9.0, 9.1, 9.2, 9.3, 10.1, 10.3, 10.4
+Contains **known-good files** for version fingerprinting (at the repository root):
+- Versions covered: 8.0, 8.1, 8.2, 9.0, 9.1, 9.2, 9.3, 10.1, 10.2, 10.3, 10.4
 - Files per version: `webedit.css`, `default.css`, `default.js`
+- Pre-computed hashes stored in `chrome-extension/data/version-hashes.json`
+- Regenerate with `scripts/generate-hashes.ps1` when adding new versions
 
 ---
 

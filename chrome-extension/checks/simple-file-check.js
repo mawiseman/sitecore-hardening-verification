@@ -6,9 +6,20 @@ let versionHashesCache = null;
 
 async function loadVersionHashes() {
   if (!versionHashesCache) {
-    const url = chrome.runtime.getURL('data/version-hashes.json');
-    const response = await fetch(url);
-    versionHashesCache = await response.json();
+    if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+      // Chrome extension context
+      const url = chrome.runtime.getURL('data/version-hashes.json');
+      const response = await fetch(url);
+      versionHashesCache = await response.json();
+    } else {
+      // Node.js context
+      const { readFileSync } = await import('node:fs');
+      const { fileURLToPath } = await import('node:url');
+      const { dirname, join } = await import('node:path');
+      const dir = dirname(fileURLToPath(import.meta.url));
+      const raw = readFileSync(join(dir, '..', 'data', 'version-hashes.json'), 'utf8').replace(/^\uFEFF/, '');
+      versionHashesCache = JSON.parse(raw);
+    }
   }
   return versionHashesCache;
 }

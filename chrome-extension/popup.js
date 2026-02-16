@@ -90,6 +90,12 @@ function formatTimestamp(ts) {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function getBadgeInfo(outcome) {
+  if (outcome === 'Pass') return { cls: 'badge-pass', icon: '\u2713' };
+  if (outcome === 'Warn') return { cls: 'badge-warn', icon: '!' };
+  return { cls: 'badge-fail', icon: '\u2717' };
+}
+
 function renderResults(data) {
   const resultsContainer = document.getElementById('results');
   const versionSection = document.getElementById('version-section');
@@ -110,18 +116,26 @@ function renderResults(data) {
   // Render each check result
   resultsContainer.innerHTML = '';
 
+  // Show skipped notice for XM Cloud sites
+  if (data.isXMCloud) {
+    const notice = document.createElement('div');
+    notice.className = 'xm-cloud-notice';
+    notice.textContent = 'XM Cloud site detected. XM/XP hardening checks do not apply.';
+    resultsContainer.appendChild(notice);
+  }
+
   for (const result of data.siteResults) {
     const item = document.createElement('div');
     item.className = 'check-item';
 
     const hasSubTests = result.tests && result.tests.length > 0;
-    const isPassing = result.outcome === 'Pass';
+    const badgeInfo = getBadgeInfo(result.outcome);
 
     // Header row
     const header = document.createElement('div');
     header.className = 'check-header';
     header.innerHTML = `
-      <span class="badge ${isPassing ? 'badge-pass' : 'badge-fail'}">${isPassing ? '\u2713' : '\u2717'}</span>
+      <span class="badge ${badgeInfo.cls}">${badgeInfo.icon}</span>
       <span class="check-title">${escapeHtml(result.title)}</span>
       ${result.details ? `<span class="check-details">${escapeHtml(result.details)}</span>` : ''}
       ${hasSubTests ? '<span class="expand-icon">\u25B6</span>' : ''}
@@ -135,11 +149,11 @@ function renderResults(data) {
       subTests.className = 'sub-tests';
 
       for (const test of result.tests) {
-        const subIsPassing = test.outcome === 'Pass';
+        const subBadge = getBadgeInfo(test.outcome);
         const sub = document.createElement('div');
         sub.className = 'sub-test';
         sub.innerHTML = `
-          <span class="sub-badge ${subIsPassing ? 'badge-pass' : 'badge-fail'}">${subIsPassing ? '\u2713' : '\u2717'}</span>
+          <span class="sub-badge ${subBadge.cls}">${subBadge.icon}</span>
           <div>
             <div class="sub-test-title">${escapeHtml(test.title)}</div>
             ${test.details ? `<div class="sub-test-details">${escapeHtml(test.details)}</div>` : ''}
