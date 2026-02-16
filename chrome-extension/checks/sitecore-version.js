@@ -1,8 +1,10 @@
+import { fetchUrl } from './result.js';
+
 export async function checkSitecoreVersion(baseUrl) {
   const url = new URL('/sitecore/shell/sitecore.version.xml', baseUrl).href;
 
   try {
-    const response = await fetch(url, { redirect: 'follow' });
+    const response = await fetchUrl(url, { redirect: 'follow' });
     const status = response.status;
 
     if (status === 401 || status === 403) {

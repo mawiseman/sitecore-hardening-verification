@@ -1,4 +1,4 @@
-import { PASS, FAIL, createResult } from './result.js';
+import { PASS, FAIL, createResult, fetchUrl } from './result.js';
 
 const PATHS = [
   '/sitecore/admin/dbbrowser.css',
@@ -18,11 +18,11 @@ export async function checkDenyAnonymous(baseUrl) {
 
     try {
       // Phase 1: check for redirect without following
-      const manualResponse = await fetch(url, { redirect: 'manual' });
+      const manualResponse = await fetchUrl(url, { redirect: 'manual' });
 
       if (manualResponse.type === 'opaqueredirect') {
         // Redirect detected - follow it to check destination
-        const followResponse = await fetch(url, { redirect: 'follow' });
+        const followResponse = await fetchUrl(url, { redirect: 'follow' });
         const finalUrl = followResponse.url.toLowerCase();
         details = `StatusCode: ${followResponse.status} (redirected to ${followResponse.url})`;
 

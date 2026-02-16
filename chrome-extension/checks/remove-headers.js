@@ -1,4 +1,4 @@
-import { PASS, FAIL, createResult } from './result.js';
+import { PASS, FAIL, createResult, fetchUrl } from './result.js';
 
 const HEADERS_TO_CHECK = [
   'X-Aspnet-Version',
@@ -11,7 +11,7 @@ export async function checkRemoveHeaders(baseUrl) {
   const tests = [];
 
   try {
-    const response = await fetch(baseUrl);
+    const response = await fetchUrl(baseUrl);
 
     for (const header of HEADERS_TO_CHECK) {
       const value = response.headers.get(header);

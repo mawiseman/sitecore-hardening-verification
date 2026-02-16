@@ -1,4 +1,4 @@
-import { PASS, FAIL, createResult } from './result.js';
+import { PASS, FAIL, createResult, fetchUrl } from './result.js';
 
 export async function checkLimitXsl(baseUrl) {
   const path = '/xsl/sample%20rendering.xslt';
@@ -7,7 +7,7 @@ export async function checkLimitXsl(baseUrl) {
   let statusCode = 0;
 
   try {
-    const response = await fetch(url);
+    const response = await fetchUrl(url);
     statusCode = response.status;
     if (statusCode === 200) {
       pathOutcome = FAIL;

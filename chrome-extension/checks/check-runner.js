@@ -5,11 +5,11 @@ import { checkLimitXsl } from './limit-xsl.js';
 import { checkRemoveHeaders } from './remove-headers.js';
 import { checkSimpleFileCheck } from './simple-file-check.js';
 import { checkUnsupportedLanguages } from './unsupported-languages.js';
-import { checkXMCloud } from './xm-cloud.js';
+import { checkIsJss, checkIsXMCloud } from './xm-cloud.js';
 import { checkJssVersion } from './jss-version.js';
 import { checkXMCloudApiKey } from './xm-cloud-api-key.js';
 
-// XM/XP checks - skipped when XM Cloud is detected
+// XM/XP checks - skipped when JSS is detected
 const XM_XP_CHECKS = [
   { name: 'Sitecore Version', fn: (url) => checkSitecoreVersion(url), isVersion: true },
   { name: 'Force HTTPS Redirect', fn: (url) => checkForceHttps(url) },
@@ -33,44 +33,50 @@ export async function runAllChecks(url, onProgress) {
   let sitecoreVersion = 'Unknown';
   let isXMCloud = false;
 
-  // Step 1: Check for XM Cloud first
+  // Step 1: Check for JSS (Next.js + Sitecore)
   if (onProgress) {
-    onProgress({ step: 1, total: XM_XP_CHECKS.length + 1, name: 'XM Cloud Detection' });
+    onProgress({ step: 1, total: XM_XP_CHECKS.length + 2, name: 'JSS Detection' });
   }
 
-  const xmCloudResult = await checkXMCloud(baseUrl);
-  results.push(xmCloudResult);
-  isXMCloud = xmCloudResult.outcome === 'Pass';
+  const jssCheck = await checkIsJss(baseUrl);
+  results.push(jssCheck.result);
+  const isJss = jssCheck.result.outcome === 'Pass';
 
-  // Step 2: If XM Cloud, run XM Cloud-specific checks only
-  if (isXMCloud) {
-    // Step 2a: Identify JSS version and find the chunk with sitecoreApiKey
+  // Step 2: If JSS, run JSS-specific checks
+  if (isJss) {
     if (onProgress) {
-      onProgress({ step: 2, total: 3, name: 'Sitecore JSS Version' });
+      onProgress({ step: 2, total: 5, name: 'XM Cloud Detection' });
+    }
+
+    const xmCloudResult = checkIsXMCloud(jssCheck.jsonContent);
+    results.push(xmCloudResult);
+    isXMCloud = xmCloudResult.outcome === 'Pass';
+
+    if (onProgress) {
+      onProgress({ step: 3, total: 5, name: 'Sitecore JSS Version' });
     }
 
     const jssResult = await checkJssVersion(baseUrl);
     results.push(jssResult.result);
 
-    // Step 2b: Check the API key in the identified chunk
     if (onProgress) {
-      onProgress({ step: 3, total: 3, name: 'XM Cloud API Key' });
+      onProgress({ step: 4, total: 5, name: 'XM Cloud API Key' });
     }
 
     const apiKeyResult = checkXMCloudApiKey(jssResult.jsContent, jssResult.chunkName);
     results.push(apiKeyResult);
 
-    const version = jssResult.result.details || 'XM Cloud';
+    const version = jssResult.result.details || (isXMCloud ? 'XM Cloud' : 'JSS');
 
     return {
       siteUrl: url,
       sitecoreVersion: version,
-      isXMCloud: true,
+      isXMCloud,
       siteResults: results,
     };
   }
 
-  // Step 3: Run XM/XP checks
+  // Step 2 (non-JSS): Run XM/XP checks
   const totalSteps = XM_XP_CHECKS.length + 1;
 
   for (let i = 0; i < XM_XP_CHECKS.length; i++) {

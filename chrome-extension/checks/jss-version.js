@@ -1,4 +1,4 @@
-import { PASS, WARN, createResult } from './result.js';
+import { PASS, WARN, createResult, fetchUrl } from './result.js';
 
 /**
  * Identifies the Sitecore JSS version by finding which page chunk contains
@@ -29,7 +29,7 @@ export async function checkJssVersion(baseUrl) {
   const tests = [];
 
   try {
-    const response = await fetch(baseUrl);
+    const response = await fetchUrl(baseUrl);
     if (response.status !== 200) {
       return {
         result: createResult('Sitecore JSS Version', WARN, [], `HTTP ${response.status}`),
@@ -60,7 +60,7 @@ export async function checkJssVersion(baseUrl) {
     // Fetch each chunk and find the one containing sitecoreApiKey
     for (const chunk of chunks) {
       const chunkName = chunk.url.split('/').pop().split('?')[0];
-      const chunkResponse = await fetch(chunk.url);
+      const chunkResponse = await fetchUrl(chunk.url);
 
       if (chunkResponse.status !== 200) {
         tests.push(createResult(chunkName, WARN, [], `HTTP ${chunkResponse.status}`));

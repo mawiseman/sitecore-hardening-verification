@@ -1,4 +1,4 @@
-import { PASS, FAIL, createResult } from './result.js';
+import { PASS, FAIL, createResult, fetchUrl } from './result.js';
 
 const LANGUAGES = [
   { code: 'om', expectedStatus: 404 },
@@ -16,7 +16,7 @@ export async function checkUnsupportedLanguages(baseUrl) {
     let details = '';
 
     try {
-      const response = await fetch(url);
+      const response = await fetchUrl(url);
       const status = response.status;
 
       if (status !== lang.expectedStatus) {

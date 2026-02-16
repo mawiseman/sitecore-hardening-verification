@@ -1,4 +1,4 @@
-import { PASS, FAIL, createResult } from './result.js';
+import { PASS, FAIL, createResult, fetchUrl } from './result.js';
 
 const FILES = ['webedit.css', 'default.css', 'default.js'];
 
@@ -42,7 +42,7 @@ export async function checkSimpleFileCheck(baseUrl) {
     let details = '';
 
     try {
-      const response = await fetch(url);
+      const response = await fetchUrl(url);
       const statusCode = response.status;
 
       if (statusCode === 200) {

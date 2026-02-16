@@ -4,6 +4,7 @@
 Set-Variable PASS -option Constant -value 'Pass' -ErrorAction SilentlyContinue
 Set-Variable FAIL -option Constant -value 'Fail' -ErrorAction SilentlyContinue
 Set-Variable WARN -option Constant -value 'Warn' -ErrorAction SilentlyContinue
+Set-Variable USER_AGENT -option Constant -value 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36' -ErrorAction SilentlyContinue
 
 # Functions
 
@@ -143,7 +144,7 @@ function Get-SitecoreVersion {
         $VersionUrl = $VersionUri.AbsoluteUri
 
         try {
-            $Response = Invoke-WebRequest -Uri $VersionUrl -UseBasicParsing -ErrorAction Stop -MaximumRedirection 1
+            $Response = Invoke-WebRequest -UserAgent $USER_AGENT -Uri $VersionUrl -UseBasicParsing -ErrorAction Stop -MaximumRedirection 1
         }
         catch {
             $StatusCode = $null
@@ -318,7 +319,7 @@ function Get-HardeningResultLimitAccessToXSL {
             $StatusCode = 0
 
             try {
-                $Response = Invoke-WebRequest -Uri $TestUri.AbsoluteUri -UseBasicParsing -ErrorAction SilentlyContinue
+                $Response = Invoke-WebRequest -UserAgent $USER_AGENT -Uri $TestUri.AbsoluteUri -UseBasicParsing -ErrorAction SilentlyContinue
 
                 if ($null -ne $Response) {
                     $StatusCode = $Response.StatusCode
@@ -374,7 +375,7 @@ function Get-HardeningResultRemoveHeaders {
         )
 
         try {
-            $Response = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction SilentlyContinue
+            $Response = Invoke-WebRequest -UserAgent $USER_AGENT -Uri $Url -UseBasicParsing -ErrorAction SilentlyContinue
 
             if ($null -eq $Response) {
                 $TestResult = Get-ResultObject -Title "Connection" -Outcome $FAIL -Details "Unable to connect"
@@ -487,7 +488,7 @@ function Get-HardeningResultUnsupportedLanguages {
             $StatusCode = 0
 
             try {
-                $Response = Invoke-WebRequest -Uri $TestUrl -UseBasicParsing -ErrorAction SilentlyContinue -MaximumRedirection 1
+                $Response = Invoke-WebRequest -UserAgent $USER_AGENT -Uri $TestUrl -UseBasicParsing -ErrorAction SilentlyContinue -MaximumRedirection 1
 
                 if ($null -ne $Response) {
                     $StatusCode = [int]$Response.StatusCode
@@ -625,18 +626,20 @@ function Get-SitecoreSimpleFileCheck {
     }
 }
 
-function Get-HardeningResultIsXMCloud {
+function Get-HardeningResultIsJss {
     <#
     .SYNOPSIS
-        Check if site is running on Sitecore XM Cloud
+        Check if site is a Sitecore JSS (Next.js) application
     .DESCRIPTION
-        XM Cloud sites using Next.js include a script tag with id "__NEXT_DATA__"
+        JSS sites using Next.js include a script tag with id "__NEXT_DATA__"
         containing a JSON object. Detection versions:
         - v1: props.pageProps.sitecoreContext
         - v2: props.layoutData.sitecore
         - v3: JSON contains "sitecore" string (fallback)
+    .OUTPUTS
+        Returns a hashtable with Result (PSObject) and JsonContent (string)
     #>
-    [OutputType([psobject])]
+    [OutputType([hashtable])]
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $True)]
@@ -645,10 +648,11 @@ function Get-HardeningResultIsXMCloud {
     )
     process {
         $Result = $FAIL
-        $Details = "Not XM Cloud"
+        $Details = "Not JSS"
+        $JsonContent = $null
 
         try {
-            $Response = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction Stop
+            $Response = Invoke-WebRequest -UserAgent $USER_AGENT -Uri $Url -UseBasicParsing -ErrorAction Stop
 
             if ($null -ne $Response -and $Response.StatusCode -eq 200) {
                 $Content = $Response.Content
@@ -665,7 +669,7 @@ function Get-HardeningResultIsXMCloud {
                             $null -ne $JsonData.props.pageProps -and
                             $null -ne $JsonData.props.pageProps.sitecoreContext) {
                             $Result = $PASS
-                            $Details = "XM Cloud detected - v1"
+                            $Details = "JSS detected - v1"
                         }
                         # v2: Check for sitecore in props.layoutData
                         elseif ($null -ne $JsonData.props -and
@@ -673,12 +677,12 @@ function Get-HardeningResultIsXMCloud {
                             $null -ne $JsonData.props.pageProps.layoutData -and
                             $null -ne $JsonData.props.pageProps.layoutData.sitecore) {
                             $Result = $PASS
-                            $Details = "XM Cloud detected - v2"
+                            $Details = "JSS detected - v2"
                         }
                         # v3: Fallback - search for "sitecore" in the JSON content
                         elseif ($JsonContent -match '"sitecore"') {
                             $Result = $PASS
-                            $Details = "XM Cloud detected - unknown"
+                            $Details = "JSS detected - unknown"
                         }
                         else {
                             $Details = "Next.js found but no Sitecore data"
@@ -701,8 +705,37 @@ function Get-HardeningResultIsXMCloud {
             $Details = "Request failed: HTTP $StatusCode"
         }
 
-        # Results
-        Get-ResultObject -Title "Is XM Cloud" -Outcome $Result -Details $Details
+        @{
+            Result      = Get-ResultObject -Title "Is JSS" -Outcome $Result -Details $Details
+            JsonContent = $JsonContent
+        }
+    }
+}
+
+function Get-HardeningResultIsXMCloud {
+    <#
+    .SYNOPSIS
+        Check if a JSS site is running on XM Cloud
+    .DESCRIPTION
+        Checks the __NEXT_DATA__ JSON content for references to edge.sitecorecloud.io.
+    #>
+    [OutputType([psobject])]
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $False)]
+        [String]
+        $JsonContent
+    )
+    process {
+        if (-not $JsonContent) {
+            return Get-ResultObject -Title "Is XM Cloud" -Outcome $FAIL -Details "No data to analyse"
+        }
+
+        if ($JsonContent -match 'edge\.sitecorecloud\.io') {
+            return Get-ResultObject -Title "Is XM Cloud" -Outcome $PASS -Details "edge.sitecorecloud.io detected"
+        }
+
+        Get-ResultObject -Title "Is XM Cloud" -Outcome $FAIL -Details "edge.sitecorecloud.io not found"
     }
 }
 
@@ -734,7 +767,7 @@ function Get-HardeningResultJssVersion {
         )
 
         try {
-            $PageResponse = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction Stop
+            $PageResponse = Invoke-WebRequest -UserAgent $USER_AGENT -Uri $Url -UseBasicParsing -ErrorAction Stop
             $HtmlContent = $PageResponse.Content
 
             # Collect all matching chunks with their version labels
@@ -763,7 +796,7 @@ function Get-HardeningResultJssVersion {
             foreach ($Chunk in $Chunks) {
                 $ChunkName = ($Chunk.Url -split '/')[-1] -split '\?' | Select-Object -First 1
 
-                $ChunkResponse = Invoke-WebRequest -Uri $Chunk.Url -UseBasicParsing -ErrorAction Stop
+                $ChunkResponse = Invoke-WebRequest -UserAgent $USER_AGENT -Uri $Chunk.Url -UseBasicParsing -ErrorAction Stop
                 $JsContent = $ChunkResponse.Content
 
                 if ($JsContent -notmatch 'sitecoreApiKey') {
@@ -912,23 +945,33 @@ function Get-HardeningChecks {
             # make sure we can connect to the site (or the redirected site) before running the tests
             if ($RedirectUrl -notlike "*(Unable to connect)") {
 
-                # Check for XM Cloud first - if detected, skip XM/XP hardening checks
-                Write-Progress -Activity $ReportProgressActivity -Status "Step: 2 of $($Tests): Checking Is XM Cloud" -PercentComplete ((2 / $Tests) * 100) -ParentId 1
-                $XMCloudResult = Get-HardeningResultIsXMCloud -Url $RedirectUrl
-                $SiteResults += $XMCloudResult
+                # Step 2: Check for JSS (Next.js + Sitecore)
+                Write-Progress -Activity $ReportProgressActivity -Status "Step: 2 of $($Tests): Checking Is JSS" -PercentComplete ((2 / $Tests) * 100) -ParentId 1
+                $JssCheck = Get-HardeningResultIsJss -Url $RedirectUrl
+                $SiteResults += $JssCheck.Result
+                $IsJss = $JssCheck.Result.Outcome -eq $PASS
 
-                if ($XMCloudResult.Outcome -eq $PASS) {
-                    Write-Host "XM Cloud detected - running XM Cloud checks, skipping XM/XP hardening checks" -ForegroundColor Cyan
+                $IsXMCloud = $false
 
-                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 3 of $($Tests): Checking Sitecore JSS Version" -PercentComplete ((3 / $Tests) * 100) -ParentId 1
+                if ($IsJss) {
+                    # JSS detected - run JSS-specific checks
+                    Write-Host "JSS detected - running JSS checks, skipping XM/XP hardening checks" -ForegroundColor Cyan
+
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 3 of $($Tests): Checking Is XM Cloud" -PercentComplete ((3 / $Tests) * 100) -ParentId 1
+                    $XMCloudResult = Get-HardeningResultIsXMCloud -JsonContent $JssCheck.JsonContent
+                    $SiteResults += $XMCloudResult
+                    $IsXMCloud = $XMCloudResult.Outcome -eq $PASS
+
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 4 of $($Tests): Checking Sitecore JSS Version" -PercentComplete ((4 / $Tests) * 100) -ParentId 1
                     $JssVersionResult = Get-HardeningResultJssVersion -Url $RedirectUrl
                     $SiteResults += $JssVersionResult.Result
-                    $SitecoreVersion = if ($JssVersionResult.Result.Details) { $JssVersionResult.Result.Details } else { "XM Cloud" }
+                    $SitecoreVersion = if ($JssVersionResult.Result.Details) { $JssVersionResult.Result.Details } else { if ($IsXMCloud) { "XM Cloud" } else { "JSS" } }
 
-                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 4 of $($Tests): Checking XM Cloud API Key" -PercentComplete ((4 / $Tests) * 100) -ParentId 1
+                    Write-Progress -Activity $ReportProgressActivity -Status "Step: 5 of $($Tests): Checking XM Cloud API Key" -PercentComplete ((5 / $Tests) * 100) -ParentId 1
                     $SiteResults += Get-HardeningResultXMCloudApiKey -JsContent $JssVersionResult.JsContent -ChunkName $JssVersionResult.ChunkName
                 }
                 else {
+                    # Not JSS - run XM/XP hardening checks
                     Write-Progress -Activity $ReportProgressActivity -Status "Step: 3 of $($Tests): Checking Force Https" -PercentComplete ((3 / $Tests) * 100) -ParentId 1
                     $SiteResults += Get-HardeningResultForceHttpsRedirect -Url $RedirectUrl
 
