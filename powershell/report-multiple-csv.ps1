@@ -1,7 +1,7 @@
-Import-Module ..\src\sitecore-hardening-report.psm1
+Import-Module $PSScriptRoot\sitecore-hardening-report.psm1
 
-$InputCsvPath = "..\csv-files\urls.csv"
-$OutputCsvPath = "..\csv-files\urls-sitecore-report.csv"
+$InputCsvPath = "$PSScriptRoot\..\csv-files\urls.csv"
+$OutputCsvPath = "$PSScriptRoot\..\csv-files\urls-sitecore-report.csv"
 
 # Read URLs from CSV file
 if (-not (Test-Path $InputCsvPath)) {

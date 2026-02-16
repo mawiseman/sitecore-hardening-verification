@@ -8,7 +8,7 @@ param (
     [string]$OutputPath = $env:TEMP
 )
 
-Import-Module ..\src\sitecore-hardening-report.psm1
+Import-Module $PSScriptRoot\sitecore-hardening-report.psm1
 
 $Urls = @(
     $Url

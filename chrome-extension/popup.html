@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Sitecore Hardening Verifier</h1>
+  </header>
+
+  <section id="url-section">
+    <span class="label">URL:</span>
+    <span id="site-url"></span>
+  </section>
+
+  <section id="controls">
+    <button id="run-button">Run Checks</button>
+  </section>
+
+  <div id="progress" class="hidden"></div>
+
+  <div id="cache-notice" class="hidden">
+    Cached results from <span id="cache-time"></span>
+  </div>
+
+  <section id="version-section" class="hidden">
+    <span class="label">Sitecore Version:</span>
+    <span id="version-value"></span>
+  </section>
+
+  <section id="results"></section>
+
+  <script src="popup.js"></script>
+</body>
+</html>
