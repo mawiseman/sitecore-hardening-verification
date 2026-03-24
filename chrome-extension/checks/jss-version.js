@@ -2,17 +2,16 @@ import { PASS, WARN, createResult, fetchUrl } from './result.js';
 
 /**
  * Identifies the Sitecore SDK family and version range by scanning Next.js
- * page chunks for package name strings and dependency markers.
+ * page chunks for runtime identifiers and dependency markers.
  *
- * SDK Families:
- *   - JSS 21.1.x:  @sitecore-jss, @sitecore/engage, no CloudSDK, no FEAAS
- *   - JSS 21.6.x:  @sitecore-jss, @sitecore-cloudsdk/events (no /core), FEAAS
- *   - JSS 22.1.x:  @sitecore-jss, @sitecore-cloudsdk/events (no /core), FEAAS, Next 14
- *   - JSS 22.4-5:  @sitecore-jss, @sitecore-cloudsdk/core+events, Next 14
- *   - JSS 22.9.x:  @sitecore-jss, @sitecore-cloudsdk/core+events, Next 15, React 19
- *   - Content SDK 1.2.x: @sitecore-content-sdk, @sitecore-cloudsdk/core+events, Pages Router
- *   - Content SDK 1.3.x: @sitecore-content-sdk, App Router, next-intl, Tailwind
- *   - Content SDK 2.0.x: @sitecore-content-sdk, @sitecore-content-sdk/events+analytics-core, no CloudSDK
+ * Simplified to major-version buckets (minor versions are indistinguishable
+ * after production minification strips package-scoped strings):
+ *
+ *   JSS 21.x:            React 18, sitecoreContext/layoutData in bundles
+ *   JSS 22.x (React 18): React 18, CloudSDK core+events (when visible)
+ *   JSS 22.x (React 19): React 19, CloudSDK core+events (covers 22.9, 22.10, ...)
+ *   Content SDK 1.x:     @sitecore-content-sdk, CloudSDK, Pages or App Router
+ *   Content SDK 2.x:     @sitecore-content-sdk, new initContentSdk/events/analytics, no CloudSDK
  *
  * Also returns the chunk JS content so the API key check can reuse it.
  */
@@ -24,37 +23,22 @@ const CHUNK_URL_PATTERN = /["']([^"']*_next\/static\/[^"']+\.js(?:\?[^"']*)?)["'
 
 // Bundle string signals and what they indicate
 const SIGNALS = {
-  // SDK family (package name - may be minified away)
+  // SDK family (package name - may be minified away in production)
   hasJss: /@sitecore-jss[/"']/,
   hasContentSdk: /@sitecore-content-sdk[/"']/,
 
   // SDK family (runtime identifiers - survive minification)
-  hasSitecoreContext: /sitecoreContext/,  // JSS uses sitecoreContext, Content SDK uses page.siteName
-  hasLayoutData: /layoutData/,           // JSS layoutData pattern
+  hasSitecoreContext: /sitecoreContext/,
+  hasLayoutData: /layoutData/,
 
-  // CloudSDK variants
+  // CloudSDK variants (package-scoped, may be minified away)
   hasCloudSdkCore: /@sitecore-cloudsdk\/core/,
   hasCloudSdkEvents: /@sitecore-cloudsdk\/events/,
-  hasCloudSdkPersonalize: /@sitecore-cloudsdk\/personalize/,
 
-  // Content SDK 2.0 new packages (replaces CloudSDK)
+  // Content SDK 2.x new packages (replace CloudSDK)
   hasContentSdkEvents: /@sitecore-content-sdk\/events/,
   hasContentSdkAnalytics: /@sitecore-content-sdk\/analytics/,
   hasInitContentSdk: /initContentSdk/,
-
-  // Legacy engage (JSS 21.1 only)
-  hasEngageSdk: /@sitecore\/engage/,
-
-  // FEAAS / BYOC
-  hasFeaas: /@sitecore-feaas\/clientside/,
-  hasByoc: /@sitecore\/byoc/,
-
-  // i18n
-  hasNextLocalization: /next-localization/,
-  hasNextIntl: /next-intl/,
-
-  // CSS frameworks (in HTML, not bundles)
-  // These are checked separately against HTML
 
   // API key reference
   hasSitecoreApiKey: /sitecoreApiKey/,
@@ -62,135 +46,77 @@ const SIGNALS = {
 
 /**
  * Version candidates with scoring rules.
- * Each signal match adds/subtracts from the candidate's score.
  *
- * Version map (from clean installs):
- *   JSS 21.1:  Next 13, React 18, @sitecore/engage, no CloudSDK, no FEAAS
- *   JSS 21.6:  Next 13, React 18, CloudSDK events only (no core), first FEAAS
- *   JSS 22.1:  Next 14, React 18, CloudSDK events only (no core), FEAAS
- *   JSS 22.4-5: Next 14, React 18, CloudSDK core+events, FEAAS
- *   JSS 22.9+: Next 15, React 19, CloudSDK core+events, FEAAS (covers 22.9, 22.10, etc.)
- *   ContentSDK 1.2: Next 15, React 19, CloudSDK core+events, Pages Router, next-localization
- *   ContentSDK 1.3: Next 15, React 19, CloudSDK core+events, App Router, next-intl, Tailwind
- *   ContentSDK 2.0: Next 16, React 19, no CloudSDK, @sitecore-content-sdk/events+analytics
+ * Reliable signals that survive production minification:
+ *   1. sitecoreContext / layoutData  -> JSS family (all versions)
+ *   2. React 18 vs 19               -> from framework chunk version string
+ *   3. Pages Router vs App Router   -> __NEXT_DATA__ presence
+ *   4. @sitecore-content-sdk        -> Content SDK (when not minified)
+ *   5. initContentSdk               -> Content SDK 2.x specifically
+ *
+ * Package-scoped signals (@sitecore-cloudsdk/*, @sitecore/engage, etc.)
+ * are bonus differentiators when present but cannot be relied upon.
  */
 const VERSION_CANDIDATES = [
   {
-    label: 'JSS 21.1.x',
+    label: 'JSS 21.x',
     family: 'jss',
     rules: {
-      hasJss: 30, hasContentSdk: -100,
-      hasSitecoreContext: 20, hasLayoutData: 10,
-      hasEngageSdk: 20,
-      hasCloudSdkEvents: -40, hasCloudSdkCore: -40,
-      hasFeaas: -40, hasByoc: -40,
-      hasNextLocalization: 5,
-      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100,
-      isReact18: 10, isReact19: -30,
+      hasJss: 20, hasContentSdk: -100,
+      hasSitecoreContext: 25, hasLayoutData: 10,
+      isReact18: 20, isReact19: -50,
+      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100, hasInitContentSdk: -100,
     },
-    // JSS 21.1 has NO CloudSDK, NO FEAAS - penalize when those are present (handled above),
-    // but also boost when they're absent (via absentRules)
-    absentRules: { hasCloudSdkEvents: 10, hasCloudSdkCore: 10, hasFeaas: 10 },
   },
   {
-    label: 'JSS 21.6.x',
+    label: 'JSS 22.x',
     family: 'jss',
     rules: {
-      hasJss: 30, hasContentSdk: -100,
-      hasSitecoreContext: 20, hasLayoutData: 10,
-      hasCloudSdkEvents: 15, hasCloudSdkCore: -30,
-      hasEngageSdk: -30,
-      hasFeaas: 10,
-      hasNextLocalization: 5,
-      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100,
-      isReact18: 10, isReact19: -30,
+      hasJss: 20, hasContentSdk: -100,
+      hasSitecoreContext: 25, hasLayoutData: 10,
+      hasCloudSdkCore: 10, hasCloudSdkEvents: 5,
+      isReact18: 15, isReact19: -50,
+      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100, hasInitContentSdk: -100,
     },
-    htmlRules: { isNext13: 10 },
+    // Prefer this over 21.x only when CloudSDK signals are visible
+    absentRules: { hasCloudSdkCore: -15, hasCloudSdkEvents: -10 },
   },
   {
-    label: 'JSS 22.1.x',
+    label: 'JSS 22.x',
     family: 'jss',
+    // Separate candidate for React 19 variant (22.9+, 22.10+, etc.)
     rules: {
-      hasJss: 30, hasContentSdk: -100,
-      hasSitecoreContext: 20, hasLayoutData: 10,
-      hasCloudSdkEvents: 15, hasCloudSdkCore: -20,
-      hasEngageSdk: -30,
-      hasFeaas: 10,
-      hasNextLocalization: 5,
-      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100,
-      isReact18: 15, isReact19: -30,
-    },
-    // 22.1 requires CloudSDK events but not core
-    absentRules: { hasCloudSdkEvents: -15 },
-  },
-  {
-    label: 'JSS 22.4-22.5',
-    family: 'jss',
-    rules: {
-      hasJss: 30, hasContentSdk: -100,
-      hasSitecoreContext: 20, hasLayoutData: 10,
-      hasCloudSdkCore: 15, hasCloudSdkEvents: 10,
-      hasEngageSdk: -30,
-      hasFeaas: 10,
-      hasNextLocalization: 5,
-      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100,
-      isReact18: 20, isReact19: -30,
-    },
-    // 22.4+ requires CloudSDK core+events - penalize if absent
-    absentRules: { hasCloudSdkCore: -20, hasCloudSdkEvents: -15 },
-  },
-  {
-    label: 'JSS 22.9+',
-    family: 'jss',
-    rules: {
-      hasJss: 30, hasContentSdk: -100,
-      hasSitecoreContext: 20, hasLayoutData: 10,
-      hasCloudSdkCore: 15, hasCloudSdkEvents: 10,
-      hasEngageSdk: -30,
-      hasFeaas: 10,
-      hasNextLocalization: 5,
-      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100,
-      isReact19: 20, isReact18: -30,
+      hasJss: 20, hasContentSdk: -100,
+      hasSitecoreContext: 25, hasLayoutData: 10,
+      hasCloudSdkCore: 10, hasCloudSdkEvents: 5,
+      isReact19: 20, isReact18: -50,
+      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100, hasInitContentSdk: -100,
     },
     htmlRules: { isPagesRouter: 5 },
-    absentRules: { hasCloudSdkCore: -20, hasCloudSdkEvents: -15 },
   },
   {
-    label: 'Content SDK 1.2.x',
+    label: 'Content SDK 1.x',
     family: 'content-sdk',
     rules: {
       hasContentSdk: 30, hasJss: -100,
       hasSitecoreContext: -30,
-      hasCloudSdkCore: 15, hasCloudSdkEvents: 10,
-      hasNextLocalization: 10, hasNextIntl: -20,
-      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100,
+      hasCloudSdkCore: 10, hasCloudSdkEvents: 5,
       isReact19: 10,
+      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100, hasInitContentSdk: -100,
     },
-    htmlRules: { isPagesRouter: 15, isAppRouter: -50 },
+    htmlRules: { isPagesRouter: 5, isAppRouter: 5 },
   },
   {
-    label: 'Content SDK 1.3.x',
+    label: 'Content SDK 2.x',
     family: 'content-sdk',
     rules: {
       hasContentSdk: 30, hasJss: -100,
       hasSitecoreContext: -30,
-      hasCloudSdkCore: 15, hasCloudSdkEvents: 10,
-      hasNextIntl: 20, hasNextLocalization: -20,
-      hasContentSdkEvents: -100, hasContentSdkAnalytics: -100,
-      isReact19: 10,
-    },
-    htmlRules: { isAppRouter: 25, isPagesRouter: -50 },
-  },
-  {
-    label: 'Content SDK 2.0.x',
-    family: 'content-sdk',
-    rules: {
-      hasContentSdk: 30, hasJss: -100,
-      hasContentSdkEvents: 25, hasContentSdkAnalytics: 25, hasInitContentSdk: 15,
+      hasContentSdkEvents: 25, hasContentSdkAnalytics: 25, hasInitContentSdk: 20,
       hasCloudSdkCore: -30, hasCloudSdkEvents: -30,
-      hasNextLocalization: 5,
+      isReact19: 5,
     },
-    htmlRules: { isPagesRouter: 10, isNext16Plus: 15, isReact19: 5 },
+    htmlRules: { isPagesRouter: 5, isNext16Plus: 10 },
   },
 ];
 
@@ -278,43 +204,25 @@ function detectHtmlSignals(html, jsonContent) {
   const hasNextData = !!jsonContent || /<script\s+id="__NEXT_DATA__"/.test(html);
   const hasRscPayload = html.includes('self.__next_f.push');
 
-  // Next.js version detection from buildManifest or chunk naming
-  // Next 13: /_next/static/chunks/pages/ dominant, polyfills-c67a75d1b6f99dc8.js style
-  // Next 14: similar to 13 but _app chunk pattern changes
-  // Next 15+: can use App Router or Pages Router, different chunk structure
-  // Next 16+: experimental features, turbopack
-  const chunkPaths = [...html.matchAll(/\/_next\/static\/chunks\/[^"'\s]+/g)].map(m => m[0]);
-
-  // Detect Next.js version from chunk naming patterns and other indicators
-  let nextVersionHint = 0;
+  const chunkPaths = [...html.matchAll(/_next\/static\/chunks\/[^"'\s]+/g)].map(m => m[0]);
 
   // Turbopack chunk naming: node_modules_..., src_pages__app_..., [root-of-the-server]__...
   const hasTurbopackChunks = chunkPaths.some(p =>
     /node_modules_[^/]/.test(p) || /src_pages_/.test(p) || p.includes('[root-of-the-server]')
   );
 
-  // Next 16 indicator: turbopack chunks or turbopack-specific naming
+  let nextVersionHint = 0;
   if (hasTurbopackChunks || html.includes('turbopack-')) {
     nextVersionHint = 16;
   }
-  // RSC without __NEXT_DATA__ strongly suggests Next 13.4+ App Router
   if (hasRscPayload && !hasNextData) {
     nextVersionHint = Math.max(nextVersionHint, 15);
   }
 
-  // Traditional webpack _app chunk exists (Next 13/14 pattern)
-  const hasWebpackAppChunk = chunkPaths.some(p => /\/pages\/_app-[a-f0-9]+\.js/.test(p));
-  // Traditional catch-all path chunk (Next 13 JSS 21.x pattern)
-  const hasCatchAllChunk = chunkPaths.some(p => p.includes('/pages/%5B%5B') || p.includes('/pages/[['));
-
   return {
     isPagesRouter: hasNextData,
     isAppRouter: hasRscPayload && !hasNextData,
-    isNext13: hasNextData && hasCatchAllChunk && !hasWebpackAppChunk && nextVersionHint < 14,
     isNext16Plus: nextVersionHint >= 16,
-    // CSS framework detection from HTML
-    hasBootstrap: html.includes('bootstrap') || html.includes('class="container') || html.includes('class="row'),
-    hasTailwind: html.includes('tailwind') || /class="[^"]*(?:flex|grid|bg-|text-|p-|m-)\w/.test(html),
   };
 }
 
@@ -329,14 +237,14 @@ function scoreVersions(bundleSignals, htmlSignals) {
   for (const candidate of VERSION_CANDIDATES) {
     let score = 0;
 
-    // Apply bundle signal rules (signal present → add points)
+    // Apply rules (signal present -> add points)
     for (const [signal, points] of Object.entries(candidate.rules)) {
       if (allSignals[signal]) {
         score += points;
       }
     }
 
-    // Apply HTML signal rules (signal present → add points)
+    // Apply HTML signal rules
     if (candidate.htmlRules) {
       for (const [signal, points] of Object.entries(candidate.htmlRules)) {
         if (allSignals[signal]) {
@@ -345,9 +253,7 @@ function scoreVersions(bundleSignals, htmlSignals) {
       }
     }
 
-    // Apply absent rules (signal NOT present → add points)
-    // Used for expected dependencies: e.g. JSS 22.4 expects CloudSDK core,
-    // so if it's missing, penalize that candidate
+    // Apply absent rules (signal NOT present -> add points)
     if (candidate.absentRules) {
       for (const [signal, points] of Object.entries(candidate.absentRules)) {
         if (!allSignals[signal]) {
@@ -473,6 +379,7 @@ export async function checkJssVersion(baseUrl, html, jsonContent) {
       result: createResult('SDK Version', PASS, tests, detailParts.join(' - ')),
       jsContent: apiKeyChunkContent,
       chunkName: apiKeyChunkName,
+      bundleContent: combinedBundleContent,
       sdkFamily: best.family,
       versionLabel: best.label,
       confidence,
@@ -482,6 +389,7 @@ export async function checkJssVersion(baseUrl, html, jsonContent) {
       result: createResult('SDK Version', WARN, tests, `Error: ${e.message}`),
       jsContent: null,
       chunkName: null,
+      bundleContent: null,
       sdkFamily: null,
     };
   }

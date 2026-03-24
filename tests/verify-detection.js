@@ -10,6 +10,8 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { runAllChecks } from '../chrome-extension/checks/check-runner.js';
 
 const color = {
@@ -32,9 +34,11 @@ function parseCsv(filePath) {
   });
 }
 
-const filterArg = process.argv.find(a => a === '--filter') ? process.argv[process.argv.indexOf('--filter') + 1] : null;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const filterIdx = process.argv.indexOf('--filter');
+const filterArg = filterIdx !== -1 ? process.argv[filterIdx + 1] : null;
 
-const sites = parseCsv(new URL('./known-sites.csv', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'));
+const sites = parseCsv(join(__dirname, '../csv-files/known-sites.csv'));
 
 let passed = 0;
 let failed = 0;
@@ -42,29 +46,21 @@ let failed = 0;
 for (const site of sites) {
   if (filterArg && !site.url.includes(filterArg)) continue;
 
-  process.stderr.write(`Testing ${site.url} (expect ${site.expected_sdk} ${site.expected_version})...\n`);
+  process.stderr.write(`Testing ${site.url} (expect ${site.expected_label})...\n`);
 
   const data = await runAllChecks(site.url);
 
-  // Check SDK family
-  const familyOk = data.sdkFamily === site.expected_sdk;
+  const familyOk = data.sdkFamily === site.expected_family;
+  const labelOk = data.sitecoreVersion === site.expected_label;
 
-  // Check version label matches the major range
-  // e.g. expected "21.1.0" should match label "JSS 21.x"
-  //      expected "22.10.0" should match label "JSS 22.9+"
-  const expectedMajor = site.expected_version.split('.')[0];
-  const versionLabel = data.sitecoreVersion || '';
-  // Also accept range labels like "22.9+" for 22.10
-  const labelMatchesMajor = versionLabel.includes(expectedMajor + '.') || versionLabel.includes(expectedMajor);
-
-  if (familyOk && labelMatchesMajor) {
+  if (familyOk && labelOk) {
     passed++;
-    console.log(`${color.green}PASS${color.reset} ${site.url} -> ${versionLabel} (family: ${data.sdkFamily})`);
+    console.log(`${color.green}PASS${color.reset} ${site.url} -> ${data.sitecoreVersion} (family: ${data.sdkFamily}, confidence: ${data.confidence})`);
   } else {
     failed++;
     console.log(`${color.red}FAIL${color.reset} ${site.url}`);
-    console.log(`  Expected: ${site.expected_sdk} ${site.expected_version}`);
-    console.log(`  Got:      ${data.sdkFamily || 'null'} / ${versionLabel}`);
+    console.log(`  Expected: family=${site.expected_family}, label=${site.expected_label}`);
+    console.log(`  Got:      family=${data.sdkFamily || 'null'}, label=${data.sitecoreVersion}`);
     if (data.confidence) console.log(`  Confidence: ${data.confidence}`);
   }
 }

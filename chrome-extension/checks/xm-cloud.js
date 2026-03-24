@@ -107,10 +107,16 @@ function detectAppRouter(html) {
 
 /**
  * Determines if a site is XM Cloud by checking whether
- * edge.sitecorecloud.io is referenced in the page content.
+ * edge.sitecorecloud.io is referenced in:
+ *   1. __NEXT_DATA__ JSON content
+ *   2. HTML source
+ *   3. JS bundle content (fetched during version detection)
+ *
+ * Some sites resolve the Edge URL at build time so it only appears
+ * in the bundled JS, not in the HTML or __NEXT_DATA__.
  */
-export function checkIsXMCloud(jsonContent, html) {
-  const searchTargets = [jsonContent, html].filter(Boolean);
+export function checkIsXMCloud(jsonContent, html, bundleContent) {
+  const searchTargets = [jsonContent, html, bundleContent].filter(Boolean);
 
   if (searchTargets.length === 0) {
     return createResult('Is XM Cloud', FAIL, [], 'No data to analyse');

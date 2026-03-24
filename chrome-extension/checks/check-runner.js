@@ -45,20 +45,22 @@ export async function runAllChecks(url, onProgress) {
   // Step 2: If JSS/Content SDK, run headless-specific checks
   if (isJss) {
     if (onProgress) {
-      onProgress({ step: 2, total: 5, name: 'XM Cloud Detection' });
+      onProgress({ step: 2, total: 5, name: 'SDK Version Detection' });
     }
 
-    const xmCloudResult = checkIsXMCloud(jssCheck.jsonContent, jssCheck.html);
-    results.push(xmCloudResult);
-    isXMCloud = xmCloudResult.outcome === 'Pass';
-
-    if (onProgress) {
-      onProgress({ step: 3, total: 5, name: 'SDK Version Detection' });
-    }
-
-    // Pass HTML and jsonContent from the initial fetch to avoid re-fetching
+    // Run version detection first - it fetches chunks we also need for XM Cloud detection
     const jssResult = await checkJssVersion(baseUrl, jssCheck.html, jssCheck.jsonContent);
     results.push(jssResult.result);
+
+    if (onProgress) {
+      onProgress({ step: 3, total: 5, name: 'XM Cloud Detection' });
+    }
+
+    // XM Cloud check searches HTML, JSON, and bundle content (edge.sitecorecloud.io
+    // may only appear in JS bundles, not in the HTML or __NEXT_DATA__)
+    const xmCloudResult = checkIsXMCloud(jssCheck.jsonContent, jssCheck.html, jssResult.bundleContent);
+    results.push(xmCloudResult);
+    isXMCloud = xmCloudResult.outcome === 'Pass';
 
     if (onProgress) {
       onProgress({ step: 4, total: 5, name: 'XM Cloud API Key' });
