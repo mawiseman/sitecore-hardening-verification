@@ -97,9 +97,19 @@ function printConsoleReport(data) {
   let versionColor = color.green;
   if (data.sitecoreVersion.includes('Unknown')) versionColor = color.white;
   else if (data.sitecoreVersion.includes('Probably')) versionColor = color.yellow;
-  else if (data.sitecoreVersion === 'XM Cloud' || data.sitecoreVersion.startsWith('JSS')) versionColor = color.cyan;
+  else if (data.sitecoreVersion.startsWith('JSS') || data.sitecoreVersion.startsWith('Content SDK')) versionColor = color.cyan;
 
-  console.log(`${color.white}${pad('Sitecore Version', PAD)}${color.reset}| ${versionColor}${data.sitecoreVersion}${color.reset}`);
+  let versionDisplay = data.sitecoreVersion;
+  if (data.confidence && data.confidence !== 'High') {
+    versionDisplay += ` ${color.dim}(${data.confidence} confidence)${versionColor}`;
+  }
+
+  console.log(`${color.white}${pad('Sitecore Version', PAD)}${color.reset}| ${versionColor}${versionDisplay}${color.reset}`);
+
+  if (data.sdkFamily) {
+    const familyLabel = data.sdkFamily === 'content-sdk' ? 'Content SDK' : 'JSS';
+    console.log(`${color.white}${pad('SDK Family', PAD)}${color.reset}| ${color.cyan}${familyLabel}${color.reset}`);
+  }
 
   if (data.isXMCloud) {
     console.log(`${color.dim}XM Cloud site detected. XM/XP hardening checks do not apply.${color.reset}`);
@@ -146,7 +156,7 @@ function buildCsvRows(allResults) {
   }
 
   // Header
-  const header = ['URL', 'SitecoreVersion', 'IsXMCloud'];
+  const header = ['URL', 'SitecoreVersion', 'SDKFamily', 'Confidence', 'IsXMCloud'];
   for (const name of checkNames) {
     header.push(`${name} Summary`);
   }
@@ -155,7 +165,7 @@ function buildCsvRows(allResults) {
 
   // Data rows - one per URL
   for (const data of allResults) {
-    const row = [data.siteUrl, data.sitecoreVersion, data.isXMCloud];
+    const row = [data.siteUrl, data.sitecoreVersion, data.sdkFamily || '', data.confidence || '', data.isXMCloud];
 
     for (const name of checkNames) {
       const result = data.siteResults.find(r => r.title === name);

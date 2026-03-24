@@ -1,0 +1,4 @@
+url,expected_sdk,expected_version,source_project,notes
+https://tonys.nz/,jss,21.1.0,BSCAP-BSANZ-ECommerce,XM Cloud; API key exposed
+https://www.dairyaustralia.com.au/,jss,21.7.1,Dairy Australia Website,XM Cloud; served from dairy-prod.vercel.app
+https://sc-xmc.dev.ausgrid.com.au/,jss,22.10.0,ausgrid-xmc,Not XM Cloud (no edge.sitecorecloud.io); Tailwind

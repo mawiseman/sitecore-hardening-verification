@@ -33,30 +33,31 @@ export async function runAllChecks(url, onProgress) {
   let sitecoreVersion = 'Unknown';
   let isXMCloud = false;
 
-  // Step 1: Check for JSS (Next.js + Sitecore)
+  // Step 1: Check for JSS / Content SDK (Next.js + Sitecore)
   if (onProgress) {
-    onProgress({ step: 1, total: XM_XP_CHECKS.length + 2, name: 'JSS Detection' });
+    onProgress({ step: 1, total: XM_XP_CHECKS.length + 2, name: 'JSS / Content SDK Detection' });
   }
 
   const jssCheck = await checkIsJss(baseUrl);
   results.push(jssCheck.result);
   const isJss = jssCheck.result.outcome === 'Pass';
 
-  // Step 2: If JSS, run JSS-specific checks
+  // Step 2: If JSS/Content SDK, run headless-specific checks
   if (isJss) {
     if (onProgress) {
       onProgress({ step: 2, total: 5, name: 'XM Cloud Detection' });
     }
 
-    const xmCloudResult = checkIsXMCloud(jssCheck.jsonContent);
+    const xmCloudResult = checkIsXMCloud(jssCheck.jsonContent, jssCheck.html);
     results.push(xmCloudResult);
     isXMCloud = xmCloudResult.outcome === 'Pass';
 
     if (onProgress) {
-      onProgress({ step: 3, total: 5, name: 'Sitecore JSS Version' });
+      onProgress({ step: 3, total: 5, name: 'SDK Version Detection' });
     }
 
-    const jssResult = await checkJssVersion(baseUrl);
+    // Pass HTML and jsonContent from the initial fetch to avoid re-fetching
+    const jssResult = await checkJssVersion(baseUrl, jssCheck.html, jssCheck.jsonContent);
     results.push(jssResult.result);
 
     if (onProgress) {
@@ -66,12 +67,14 @@ export async function runAllChecks(url, onProgress) {
     const apiKeyResult = checkXMCloudApiKey(jssResult.jsContent, jssResult.chunkName);
     results.push(apiKeyResult);
 
-    const version = jssResult.result.details || (isXMCloud ? 'XM Cloud' : 'JSS');
+    const version = jssResult.versionLabel || jssResult.result.details || (isXMCloud ? 'XM Cloud' : 'JSS');
 
     return {
       siteUrl: url,
       sitecoreVersion: version,
       isXMCloud,
+      sdkFamily: jssResult.sdkFamily,
+      confidence: jssResult.confidence,
       siteResults: results,
     };
   }
@@ -99,6 +102,8 @@ export async function runAllChecks(url, onProgress) {
     siteUrl: url,
     sitecoreVersion,
     isXMCloud: false,
+    sdkFamily: null,
+    confidence: null,
     siteResults: results,
   };
 }

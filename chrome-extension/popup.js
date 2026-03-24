@@ -113,6 +113,11 @@ function renderResults(data) {
     versionValue.className = 'version-known';
   }
 
+  // Show confidence if not high
+  if (data.confidence && data.confidence !== 'High') {
+    versionValue.textContent += ` (${data.confidence} confidence)`;
+  }
+
   // Render each check result
   resultsContainer.innerHTML = '';
 

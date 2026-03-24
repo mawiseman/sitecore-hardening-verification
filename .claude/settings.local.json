@@ -14,7 +14,9 @@
       "Bash(node:*)",
       "WebFetch(domain:www.beyondblue.org.au)",
       "Bash(curl:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Read(//c/projects/sitecore-xmcloud-clean/**)",
+      "Read(//dev/**)"
     ],
     "deny": [],
     "ask": []
