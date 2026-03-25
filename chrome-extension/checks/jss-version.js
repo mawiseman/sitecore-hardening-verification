@@ -270,7 +270,7 @@ function scoreVersions(bundleSignals, htmlSignals) {
   return scores;
 }
 
-export async function checkJssVersion(baseUrl, html, jsonContent) {
+export async function checkJssVersion(baseUrl, html, jsonContent, routerType) {
   const tests = [];
 
   try {
@@ -349,7 +349,8 @@ export async function checkJssVersion(baseUrl, html, jsonContent) {
     else confidence = 'Uncertain';
 
     // Build details string
-    const detailParts = [best.label];
+    const versionWithRouter = routerType ? `${best.label} (${routerType})` : best.label;
+    const detailParts = [versionWithRouter];
     if (confidence !== 'High') detailParts.push(`confidence: ${confidence}`);
 
     // Add signal summary for debugging
@@ -381,7 +382,7 @@ export async function checkJssVersion(baseUrl, html, jsonContent) {
       chunkName: apiKeyChunkName,
       bundleContent: combinedBundleContent,
       sdkFamily: best.family,
-      versionLabel: best.label,
+      versionLabel: versionWithRouter,
       confidence,
     };
   } catch (e) {

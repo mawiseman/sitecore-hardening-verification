@@ -13,6 +13,7 @@ export async function checkIsJss(baseUrl) {
   let details = 'Not JSS / Content SDK';
   let jsonContent = null;
   let html = null;
+  let routerType = null;
 
   try {
     const response = await fetchUrl(baseUrl);
@@ -31,21 +32,25 @@ export async function checkIsJss(baseUrl) {
           // v1: props.pageProps.sitecoreContext (older JSS)
           if (data?.props?.pageProps?.sitecoreContext) {
             outcome = PASS;
+            routerType = 'Pages Router';
             details = 'Sitecore detected (Pages Router) - sitecoreContext';
           }
           // v2: props.pageProps.layoutData.sitecore (JSS 22.x)
           else if (data?.props?.pageProps?.layoutData?.sitecore) {
             outcome = PASS;
+            routerType = 'Pages Router';
             details = 'Sitecore detected (Pages Router) - layoutData';
           }
           // v3: props.pageProps.page (Content SDK 1.2 / 2.0)
           else if (data?.props?.pageProps?.page?.siteName) {
             outcome = PASS;
+            routerType = 'Pages Router';
             details = 'Sitecore detected (Pages Router) - Content SDK page';
           }
           // v4: fallback string search
           else if (jsonContent.includes('"sitecore"') || jsonContent.includes('"siteName"')) {
             outcome = PASS;
+            routerType = 'Pages Router';
             details = 'Sitecore detected (Pages Router) - fallback';
           } else {
             details = 'Next.js found but no Sitecore data';
@@ -61,6 +66,7 @@ export async function checkIsJss(baseUrl) {
         const isAppRouter = detectAppRouter(html);
         if (isAppRouter) {
           outcome = PASS;
+          routerType = 'App Router';
           details = 'Sitecore detected (App Router)';
         }
       }
@@ -75,6 +81,7 @@ export async function checkIsJss(baseUrl) {
     result: createResult('Is JSS / Content SDK', outcome, [], details),
     jsonContent,
     html,
+    routerType,
   };
 }
 

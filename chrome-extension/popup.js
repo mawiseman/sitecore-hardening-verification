@@ -121,14 +121,6 @@ function renderResults(data) {
   // Render each check result
   resultsContainer.innerHTML = '';
 
-  // Show skipped notice for XM Cloud sites
-  if (data.isXMCloud) {
-    const notice = document.createElement('div');
-    notice.className = 'xm-cloud-notice';
-    notice.textContent = 'XM Cloud site detected. XM/XP hardening checks do not apply.';
-    resultsContainer.appendChild(notice);
-  }
-
   for (const result of data.siteResults) {
     const item = document.createElement('div');
     item.className = 'check-item';

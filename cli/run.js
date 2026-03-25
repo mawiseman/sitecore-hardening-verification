@@ -111,10 +111,6 @@ function printConsoleReport(data) {
     console.log(`${color.white}${pad('SDK Family', PAD)}${color.reset}| ${color.cyan}${familyLabel}${color.reset}`);
   }
 
-  if (data.isXMCloud) {
-    console.log(`${color.dim}XM Cloud site detected. XM/XP hardening checks do not apply.${color.reset}`);
-  }
-
   console.log();
 
   for (const result of data.siteResults) {

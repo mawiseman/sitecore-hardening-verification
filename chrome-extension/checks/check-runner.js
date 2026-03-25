@@ -35,25 +35,24 @@ export async function runAllChecks(url, onProgress) {
 
   // Step 1: Check for JSS / Content SDK (Next.js + Sitecore)
   if (onProgress) {
-    onProgress({ step: 1, total: XM_XP_CHECKS.length + 2, name: 'JSS / Content SDK Detection' });
+    onProgress({ step: 1, total: XM_XP_CHECKS.length + 1, name: 'JSS / Content SDK Detection' });
   }
 
   const jssCheck = await checkIsJss(baseUrl);
-  results.push(jssCheck.result);
   const isJss = jssCheck.result.outcome === 'Pass';
 
   // Step 2: If JSS/Content SDK, run headless-specific checks
   if (isJss) {
     if (onProgress) {
-      onProgress({ step: 2, total: 5, name: 'SDK Version Detection' });
+      onProgress({ step: 2, total: 4, name: 'SDK Version Detection' });
     }
 
     // Run version detection first - it fetches chunks we also need for XM Cloud detection
-    const jssResult = await checkJssVersion(baseUrl, jssCheck.html, jssCheck.jsonContent);
+    const jssResult = await checkJssVersion(baseUrl, jssCheck.html, jssCheck.jsonContent, jssCheck.routerType);
     results.push(jssResult.result);
 
     if (onProgress) {
-      onProgress({ step: 3, total: 5, name: 'XM Cloud Detection' });
+      onProgress({ step: 3, total: 4, name: 'XM Cloud Detection' });
     }
 
     // XM Cloud check searches HTML, JSON, and bundle content (edge.sitecorecloud.io
@@ -63,7 +62,7 @@ export async function runAllChecks(url, onProgress) {
     isXMCloud = xmCloudResult.outcome === 'Pass';
 
     if (onProgress) {
-      onProgress({ step: 4, total: 5, name: 'XM Cloud API Key' });
+      onProgress({ step: 4, total: 4, name: 'XM Cloud API Key' });
     }
 
     const apiKeyResult = checkXMCloudApiKey(jssResult.jsContent, jssResult.chunkName);
@@ -97,6 +96,18 @@ export async function runAllChecks(url, onProgress) {
       sitecoreVersion = result;
     } else {
       results.push(result);
+    }
+  }
+
+  // If version XML didn't return a definitive version, try Simple File Check
+  const isDefinitiveVersion = /^\d+\.\d+/.test(sitecoreVersion);
+  if (!isDefinitiveVersion) {
+    const simpleFileResult = results.find(r => r.title === 'Simple File Check');
+    if (simpleFileResult?.details) {
+      const match = simpleFileResult.details.match(/Matches:\s*(.+)/);
+      if (match) {
+        sitecoreVersion = `${match[1]} (from file fingerprint)`;
+      }
     }
   }
 

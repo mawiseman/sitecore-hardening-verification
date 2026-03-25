@@ -29,7 +29,8 @@ function analyseApiKey(jsContent) {
     return { found: false, exposed: false, values: [] };
   }
 
-  const exposedValues = matches.filter(v => v.length > 0);
+  // Filter out empty strings and "undefined" (unresolved env var at build time)
+  const exposedValues = matches.filter(v => v.length > 0 && v !== 'undefined');
 
   return {
     found: true,
