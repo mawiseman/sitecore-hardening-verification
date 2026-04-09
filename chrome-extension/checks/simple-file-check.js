@@ -37,7 +37,10 @@ export async function checkSimpleFileCheck(baseUrl) {
   let fullHash = '';
 
   for (const file of FILES) {
-    const url = new URL(file, baseUrl).href;
+    // Resolve against host root - Sitecore static files always live at /,
+    // never under a path. This avoids issues when baseUrl is a redirected
+    // language variant like https://www.ghd.com/en-au/
+    const url = new URL('/' + file, baseUrl).href;
     let pathOutcome = FAIL;
     let details = '';
 
