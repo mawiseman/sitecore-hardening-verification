@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sitecore Hardening Verifier",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Verify Sitecore CMS security hardening configuration for the current site",
   "permissions": [
     "activeTab",
