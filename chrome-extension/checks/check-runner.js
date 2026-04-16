@@ -104,9 +104,11 @@ export async function runAllChecks(url, onProgress) {
   if (!isDefinitiveVersion) {
     const simpleFileResult = results.find(r => r.title === 'Simple File Check');
     if (simpleFileResult?.details) {
-      const match = simpleFileResult.details.match(/Matches:\s*(.+)/);
+      const match = simpleFileResult.details.match(/(?:Matches|Probable):\s*(.+)/);
       if (match) {
         sitecoreVersion = `${match[1]} (from file fingerprint)`;
+      } else if (simpleFileResult.outcome === 'Pass') {
+        sitecoreVersion = 'Sitecore (version unknown)';
       }
     }
   }

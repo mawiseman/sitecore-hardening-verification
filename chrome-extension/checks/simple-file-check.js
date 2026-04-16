@@ -87,11 +87,26 @@ export async function checkSimpleFileCheck(baseUrl) {
     return createResult('Simple File Check', overallOutcome, tests, `Matches: ${display}`);
   }
 
-  // Fallback: percentage of files found
+  // No composite match — check if individual files matched known versions.
+  // Collect per-file version matches and find the most specific one.
+  const perFileMatches = [];
+  for (const test of tests) {
+    if (test.details) {
+      const m = test.details.match(/Matches:\s*(.+)/);
+      if (m && m[1] !== 'Unknown') perFileMatches.push(m[1]);
+    }
+  }
+
   const filesFound = tests.filter(t => t.outcome === PASS).length;
   const pct = Math.round((filesFound / FILES.length) * 100);
 
   if (pct > 80) overallOutcome = PASS;
+
+  if (perFileMatches.length > 0) {
+    // Use the narrowest match (fewest versions in its range)
+    const best = perFileMatches.sort((a, b) => a.length - b.length)[0];
+    return createResult('Simple File Check', overallOutcome, tests, `Probable: ${best}`);
+  }
 
   return createResult('Simple File Check', overallOutcome, tests, `${pct}%`);
 }

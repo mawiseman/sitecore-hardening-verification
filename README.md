@@ -22,7 +22,10 @@ For headless Sitecore sites (JSS / Content SDK), the tools detect the SDK family
 node cli/run.js https://example.com
 node cli/run.js https://site1.com https://site2.com
 node cli/run.js --csv urls.csv --output results.csv
+node cli/run.js --csv urls.csv --output results.csv --resume
 ```
+
+When `--output` is used, each site's row is appended and flushed to disk immediately so large batches can be resumed. Pass `--resume` to skip URLs already present in the output file. Batch runs default to 4 concurrent checks; tune with `--concurrency N`.
 
 ### PowerShell
 
